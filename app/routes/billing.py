@@ -1,11 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for, g
 
 from app.extensions import db
 from app.models import Invoice, Payment, RepairOrder
-from app.models.invoice import INVOICE_STATUSES
 from app.models.payment import PAYMENT_METHODS, PAYMENT_TYPES
 from app.security import role_required
 
@@ -22,25 +21,22 @@ def _money(value):
 
 def _number(prefix, model, field):
     today = datetime.utcnow().strftime("%Y%m%d")
-    value = f"{prefix}-{today}-0001"
     latest = model.query.filter(getattr(model, field).like(f"{prefix}-{today}-%")).order_by(model.id.desc()).first()
-    if latest:
-        value = f"{prefix}-{today}-{int(getattr(latest, field).rsplit('-', 1)[-1]) + 1:04d}"
-    return value
+    sequence = int(getattr(latest, field).rsplit("-", 1)[-1]) + 1 if latest else 1
+    return f"{prefix}-{today}-{sequence:04d}"
 
 
 @billing_bp.route("/repair/<int:repair_id>/invoice", methods=["POST"])
 @role_required("admin", "staff")
 def create_invoice(repair_id):
-    repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
+    repair = RepairOrder.query.get_or_404(repair_id)
     if repair.invoice:
         return redirect(url_for("billing.view_invoice", invoice_id=repair.invoice.id))
 
     discount = _money(request.form.get("discount"))
     tax = _money(request.form.get("tax"))
     subtotal = _money(repair.final_amount)
-    if discount > subtotal:
-        discount = subtotal
+    discount = min(discount, subtotal)
     total = subtotal - discount + tax
 
     invoice = Invoice(
@@ -68,8 +64,8 @@ def view_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     paid = sum((p.amount for p in invoice.payments if p.payment_type == "Payment"), Decimal("0"))
     refunded = sum((p.amount for p in invoice.payments if p.payment_type == "Refund"), Decimal("0"))
-    balance = invoice.total - paid + refunded
-    return render_template("billing/invoice.html", invoice=invoice, paid=paid, refunded=refunded, balance=max(balance, Decimal("0")))
+    balance = max(invoice.total - paid + refunded, Decimal("0"))
+    return render_template("billing/invoice.html", invoice=invoice, paid=paid, refunded=refunded, balance=balance)
 
 
 @billing_bp.route("/invoice/<int:invoice_id>/payment", methods=["POST"])
@@ -79,19 +75,20 @@ def record_payment(invoice_id):
     payment_type = request.form.get("payment_type", "Payment")
     method = request.form.get("payment_method", "")
     amount = _money(request.form.get("amount"))
+
     if payment_type not in PAYMENT_TYPES or method not in PAYMENT_METHODS or amount <= 0:
         flash("Invalid payment details", "error")
         return redirect(url_for("billing.view_invoice", invoice_id=invoice_id))
 
-    payments = invoice.payments
-    paid = sum((p.amount for p in payments if p.payment_type == "Payment"), Decimal("0"))
-    refunded = sum((p.amount for p in payments if p.payment_type == "Refund"), Decimal("0"))
+    paid = sum((p.amount for p in invoice.payments if p.payment_type == "Payment"), Decimal("0"))
+    refunded = sum((p.amount for p in invoice.payments if p.payment_type == "Refund"), Decimal("0"))
     balance = invoice.total - paid + refunded
+    net_paid_before = paid - refunded
     if payment_type == "Payment" and amount > balance:
         flash("Payment exceeds outstanding balance", "error")
         return redirect(url_for("billing.view_invoice", invoice_id=invoice_id))
-    if payment_type == "Refund" and amount > paid:
-        flash("Refund exceeds amount actually paid", "error")
+    if payment_type == "Refund" and amount > net_paid_before:
+        flash("Refund exceeds net amount paid", "error")
         return redirect(url_for("billing.view_invoice", invoice_id=invoice_id))
 
     payment = Payment(
@@ -103,16 +100,19 @@ def record_payment(invoice_id):
         payment_type=payment_type,
         reference=request.form.get("reference", "").strip() or None,
         notes=request.form.get("notes", "").strip() or None,
-        received_by_id=getattr(request, "current_user", None).id if getattr(request, "current_user", None) else None,
+        received_by_id=g.current_user.id if g.current_user else None,
     )
     db.session.add(payment)
+
     new_paid = paid + amount if payment_type == "Payment" else paid
     new_refunded = refunded + amount if payment_type == "Refund" else refunded
-    net_balance = invoice.total - new_paid + new_refunded
-    invoice.status = "Paid" if net_balance == 0 else "Partially Paid" if new_paid > 0 else "Issued"
+    net_paid = new_paid - new_refunded
+    outstanding = invoice.total - net_paid
+    invoice.status = "Paid" if outstanding == 0 else "Partially Paid" if net_paid > 0 else "Issued"
+
     repair = invoice.repair
-    repair.amount_paid = new_paid - new_refunded
-    repair.payment_status = "Paid" if net_balance == 0 else "Partially Paid" if repair.amount_paid > 0 else "Unpaid"
+    repair.amount_paid = max(net_paid, Decimal("0"))
+    repair.payment_status = "Paid" if outstanding == 0 else "Partially Paid" if net_paid > 0 else "Unpaid"
     repair.payment_method = method
     db.session.commit()
     flash(f"{payment_type} {payment.payment_number} recorded", "success")
