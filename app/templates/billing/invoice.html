@@ -14,8 +14,9 @@
         <div class="flex justify-between"><span>Discount</span><span>₹{{ '%.2f'|format(invoice.discount) }}</span></div>
         <div class="flex justify-between"><span>Tax</span><span>₹{{ '%.2f'|format(invoice.tax) }}</span></div>
         <div class="border-t pt-3 flex justify-between text-lg font-bold"><span>Total</span><span>₹{{ '%.2f'|format(invoice.total) }}</span></div>
-        <div class="flex justify-between text-green-600"><span>Paid</span><span>₹{{ '%.2f'|format(paid) }}</span></div>
-        <div class="flex justify-between text-red-600"><span>Balance</span><span>₹{{ '%.2f'|format(balance) }}</span></div>
+        <div class="flex justify-between text-green-600"><span>Total received</span><span>₹{{ '%.2f'|format(net_paid) }}</span></div>
+        {% if refunded > 0 %}<div class="flex justify-between text-orange-600"><span>Total refunded</span><span>₹{{ '%.2f'|format(refunded) }}</span></div>{% endif %}
+        <div class="flex justify-between text-red-600 font-semibold"><span>Balance due</span><span>₹{{ '%.2f'|format(balance) }}</span></div>
     </div>
 
     {% if balance > 0 %}
@@ -23,13 +24,22 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2 class="font-bold text-lg">Record Payment</h2>
         <input name="amount" type="number" min="0.01" step="0.01" max="{{ balance }}" required placeholder="Amount" class="w-full px-4 py-2 rounded border">
-        <select name="payment_method" required class="w-full px-4 py-2 rounded border">
-            <option value="">Payment method</option>
-            <option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option><option>Other</option>
-        </select>
+        <select name="payment_method" required class="w-full px-4 py-2 rounded border"><option value="">Payment method</option><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option><option>Other</option></select>
         <input name="reference" placeholder="Transaction/reference number" class="w-full px-4 py-2 rounded border">
         <textarea name="notes" placeholder="Notes" class="w-full px-4 py-2 rounded border"></textarea>
         <button class="bg-blue-600 text-white px-5 py-2 rounded">Record Payment</button>
+    </form>
+    {% endif %}
+
+    {% if net_paid > 0 %}
+    <form method="post" action="{{ url_for('billing.record_payment', invoice_id=invoice.id) }}" class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="payment_type" value="Refund">
+        <h2 class="font-bold text-lg">Record Refund</h2>
+        <input name="amount" type="number" min="0.01" step="0.01" max="{{ net_paid }}" required placeholder="Refund amount" class="w-full px-4 py-2 rounded border">
+        <select name="payment_method" required class="w-full px-4 py-2 rounded border"><option value="">Refund method</option><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option><option>Other</option></select>
+        <input name="reference" placeholder="Refund reference" class="w-full px-4 py-2 rounded border">
+        <textarea name="notes" placeholder="Refund notes" class="w-full px-4 py-2 rounded border"></textarea>
+        <button class="bg-orange-600 text-white px-5 py-2 rounded">Record Refund</button>
     </form>
     {% endif %}
 
@@ -38,7 +48,7 @@
         {% for payment in invoice.payments|sort(attribute='created_at', reverse=True) %}
         <div class="flex justify-between py-3 border-b last:border-0">
             <div><div class="font-medium">{{ payment.payment_number }}</div><div class="text-xs text-slate-500">{{ payment.payment_method }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</div></div>
-            <div class="text-right"><div class="font-semibold">₹{{ '%.2f'|format(payment.amount) }}</div><div class="text-xs">{{ payment.payment_type }}</div></div>
+            <div class="text-right"><div class="font-semibold {% if payment.payment_type == 'Refund' %}text-orange-600{% else %}text-green-600{% endif %}">{% if payment.payment_type == 'Refund' %}-{% endif %}₹{{ '%.2f'|format(payment.amount) }}</div><div class="text-xs">{{ payment.payment_type }}</div></div>
         </div>
         {% else %}<p class="text-slate-500">No payments recorded.</p>{% endfor %}
     </div>
