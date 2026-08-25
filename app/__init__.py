@@ -37,6 +37,7 @@ def create_app(config_name=None):
     from app.routes.profitability import profitability_bp
     from app.routes.leads import leads_bp
     from app.routes.bookings import bookings_bp
+    from app.routes.booking_conversion import conversion_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -49,6 +50,7 @@ def create_app(config_name=None):
     app.register_blueprint(profitability_bp)
     app.register_blueprint(leads_bp)
     app.register_blueprint(bookings_bp)
+    app.register_blueprint(conversion_bp)
 
     from app.commands import create_admin, seed_db, seed_db_all
     app.cli.add_command(create_admin)
