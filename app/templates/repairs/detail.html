@@ -3,13 +3,11 @@
 <div class="max-w-5xl mx-auto space-y-6">
     <a href="{{ url_for('repair.list_repairs') }}" class="inline-flex items-center text-sm text-slate-500 hover:text-blue-600 transition mb-2">← Back to Repairs List</a>
     <div class="flex justify-between items-start">
-        <div><h1 class="text-3xl font-bold text-slate-900 dark:text-white">Order #{{ repair.id }}</h1><p class="text-slate-500 mt-1">Created on {{ repair.created_at.strftime('%B %d, %Y') }}</p></div>
+        <div><h1 class="text-3xl font-bold text-slate-900 dark:text-white">{{ repair.job_number }}</h1><p class="text-slate-500 mt-1">Created on {{ repair.created_at.strftime('%B %d, %Y') }}</p></div>
         <div class="flex gap-3">
+            {% if repair.invoice %}<a href="{{ url_for('billing.view_invoice', invoice_id=repair.invoice.id) }}" class="px-4 py-2 bg-green-600 text-white rounded-lg">View Invoice</a>{% else %}<form method="post" action="{{ url_for('billing.create_invoice', repair_id=repair.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="px-4 py-2 bg-green-600 text-white rounded-lg">Create Invoice</button></form>{% endif %}
             <a href="{{ url_for('repair.edit_repair', id=repair.id) }}" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">Edit</a>
-            <form action="{{ url_for('repair.delete_repair', id=repair.id) }}" method="POST" onsubmit="return confirm('Delete this repair order?');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg">Delete</button>
-            </form>
+            <form action="{{ url_for('repair.delete_repair', id=repair.id) }}" method="POST" onsubmit="return confirm('Delete this repair order?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg">Delete</button></form>
         </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -21,19 +19,14 @@
         </div>
         <div class="space-y-6">
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Workflow</h3>
-                <form method="post" action="{{ url_for('repair.update_repair_status', id=repair.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="space-y-3"><div class="flex items-center justify-between mb-2"><span class="text-sm text-slate-600">Current:</span><span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">{{ repair.status }}</span></div>
-                    <select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800"><option value="Pending" {% if repair.status == 'Pending' %}selected{% endif %}>Pending</option><option value="In Progress" {% if repair.status == 'In Progress' %}selected{% endif %}>In Progress</option><option value="Completed" {% if repair.status == 'Completed' %}selected{% endif %}>Completed</option></select>
-                    <button class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium">Update Status</button></div>
-                </form>
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Financials</h3>
+                <div class="space-y-2 text-sm"><div class="flex justify-between"><span>Estimate</span><span>₹{{ '%.2f'|format(repair.estimated_amount) }}</span></div><div class="flex justify-between"><span>Final</span><span>₹{{ '%.2f'|format(repair.final_amount) }}</span></div><div class="flex justify-between"><span>Paid</span><span>₹{{ '%.2f'|format(repair.amount_paid) }}</span></div><div class="flex justify-between font-semibold"><span>Payment</span><span>{{ repair.payment_status }}</span></div></div>
             </div>
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3>
-                <p class="font-medium">{{ repair.customer.name }}</p>
-                <a href="{{ url_for('repair.repairs_by_customer', customer_id=repair.customer.id) }}" class="text-xs text-blue-500 hover:underline">View History</a>
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Workflow</h3>
+                <form method="post" action="{{ url_for('repair.update_repair_status', id=repair.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="space-y-3"><div class="flex items-center justify-between mb-2"><span class="text-sm">Current:</span><span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">{{ repair.status }}</span></div><select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800"><option value="Pending" {% if repair.status == 'Pending' %}selected{% endif %}>Pending</option><option value="Diagnosing" {% if repair.status == 'Diagnosing' %}selected{% endif %}>Diagnosing</option><option value="Waiting Approval" {% if repair.status == 'Waiting Approval' %}selected{% endif %}>Waiting Approval</option><option value="Approved" {% if repair.status == 'Approved' %}selected{% endif %}>Approved</option><option value="Waiting Parts" {% if repair.status == 'Waiting Parts' %}selected{% endif %}>Waiting Parts</option><option value="In Repair" {% if repair.status == 'In Repair' %}selected{% endif %}>In Repair</option><option value="QC" {% if repair.status == 'QC' %}selected{% endif %}>QC</option><option value="Ready" {% if repair.status == 'Ready' %}selected{% endif %}>Ready</option><option value="Delivered" {% if repair.status == 'Delivered' %}selected{% endif %}>Delivered</option><option value="Cancelled" {% if repair.status == 'Cancelled' %}selected{% endif %}>Cancelled</option></select><button class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium">Update Status</button></div></form>
             </div>
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800"><h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3><p class="font-medium">{{ repair.customer.name }}</p><a href="{{ url_for('repair.repairs_by_customer', customer_id=repair.customer.id) }}" class="text-xs text-blue-500 hover:underline">View History</a></div>
         </div>
     </div>
 </div>
