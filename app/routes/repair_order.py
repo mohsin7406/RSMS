@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from sqlalchemy import or_
 
 from app.extensions import db
@@ -115,11 +115,6 @@ def _delivery_allowed(repair):
     return True, None
 
 
-def _technician_can_edit(repair):
-    user = getattr(request, "_current_user", None)
-    return user is None or user.role != "technician" or repair.assigned_technician_id == user.id
-
-
 @repair_bp.route("/")
 @repair_bp.route("/list")
 @login_required
@@ -204,6 +199,8 @@ def view_repair(id):
     repair = RepairOrder.query.filter(
         RepairOrder.id == id, RepairOrder.deleted_at.is_(None)
     ).first_or_404()
+    if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
+        return ("Forbidden", 403)
     qc = RepairQC.query.filter_by(repair_id=repair.id).first()
     return render_template("repairs/detail.html", repair=repair, qc=qc)
 
@@ -250,10 +247,9 @@ def update_repair_status(id):
     repair = RepairOrder.query.filter(
         RepairOrder.id == id, RepairOrder.deleted_at.is_(None)
     ).first_or_404()
-    current_user = getattr(request, "_current_user", None)
     new_status = request.form.get("status", "")
 
-    if current_user and current_user.role == "technician" and repair.assigned_technician_id != current_user.id:
+    if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
         return ("Forbidden", 403)
     if new_status not in REPAIR_STATUSES:
         flash("Invalid repair status", "error")
@@ -284,8 +280,7 @@ def add_part_to_repair(repair_id):
     repair = RepairOrder.query.filter(
         RepairOrder.id == repair_id, RepairOrder.deleted_at.is_(None)
     ).first_or_404()
-    current_user = getattr(request, "_current_user", None)
-    if current_user and current_user.role == "technician" and repair.assigned_technician_id != current_user.id:
+    if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
         return ("Forbidden", 403)
 
     part = (
