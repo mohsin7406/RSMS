@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-6">
     <nav class="flex text-sm text-slate-500">
         <a href="{{ url_for('repair.list_repairs') }}" class="hover:text-blue-500">Repairs</a>
         <span class="mx-2">/</span>
@@ -9,32 +9,72 @@
     </nav>
 
     <div class="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-        <h2 class="text-xl font-bold mb-6 text-slate-800 dark:text-white">{{ action }} Repair Details</h2>
+        <h2 class="text-xl font-bold mb-6 text-slate-800 dark:text-white">{{ action }} Repair Order</h2>
         <form method="post" class="space-y-6">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Select Customer</label>
-                <select name="customer_id" required class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
-                    <option value="" disabled {% if not repair %}selected{% endif %}>-- Choose Customer --</option>
-                    {% for c in customers %}<option value="{{ c.id }}" {% if repair and repair.customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
-                </select>
+
+            <div class="grid md:grid-cols-2 gap-5">
+                <div>
+                    <label class="field-label">Customer</label>
+                    <select name="customer_id" required class="field-input">
+                        <option value="" disabled {% if not repair %}selected{% endif %}>-- Choose Customer --</option>
+                        {% for c in customers %}<option value="{{ c.id }}" {% if repair and repair.customer_id == c.id %}selected{% endif %}>{{ c.name }} — {{ c.phone }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Device</label>
+                    <input name="device" required value="{{ repair.device if repair else '' }}" placeholder="iPhone 13 Pro Max" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Brand</label>
+                    <input name="brand" value="{{ repair.brand if repair else '' }}" placeholder="Apple" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Model</label>
+                    <input name="model" value="{{ repair.model if repair else '' }}" placeholder="A2643" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">IMEI</label>
+                    <input name="imei" maxlength="20" value="{{ repair.imei if repair else '' }}" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Serial Number</label>
+                    <input name="serial_number" value="{{ repair.serial_number if repair else '' }}" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Service Type</label>
+                    <select name="service_type" class="field-input">
+                        {% for value in ['In-Shop','Doorstep','Pickup/Drop'] %}<option value="{{ value }}" {% if repair and repair.service_type == value %}selected{% endif %}>{{ value }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Priority</label>
+                    <select name="priority" class="field-input">
+                        {% for value in ['Low','Normal','High','Urgent'] %}<option value="{{ value }}" {% if repair and repair.priority == value %}selected{% endif %}>{{ value }}</option>{% endfor %}
+                    </select>
+                </div>
             </div>
+
             <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Device Name/Model</label>
-                <input name="device" type="text" required value="{{ repair.device if repair else '' }}" placeholder="e.g. iPhone 13 Pro Max" class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
+                <label class="field-label">Customer Reported Issue</label>
+                <textarea name="issue_description" rows="3" required placeholder="Describe the problem..." class="field-input">{{ repair.issue_description if repair else '' }}</textarea>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Issue Description</label>
-                <textarea name="issue_description" rows="4" required placeholder="Describe the problem..." class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">{{ repair.issue_description if repair else '' }}</textarea>
+            <div class="grid md:grid-cols-2 gap-5">
+                <div><label class="field-label">Diagnosis</label><textarea name="diagnosis" rows="3" class="field-input">{{ repair.diagnosis if repair else '' }}</textarea></div>
+                <div><label class="field-label">Repair Notes</label><textarea name="repair_notes" rows="3" class="field-input">{{ repair.repair_notes if repair else '' }}</textarea></div>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Status</label>
-                <select name="status" class="w-full md:w-1/2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
-                    <option value="Pending" {% if repair and repair.status == 'Pending' %}selected{% endif %}>Pending</option>
-                    <option value="In Progress" {% if repair and repair.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                    <option value="Completed" {% if repair and repair.status == 'Completed' %}selected{% endif %}>Completed</option>
-                </select>
+
+            <div class="grid md:grid-cols-3 gap-5">
+                <div><label class="field-label">Status</label><select name="status" class="field-input">{% for value in ['Pending','Received','Diagnosing','Waiting Approval','Approved','Waiting Parts','In Progress','In Repair','QC','Ready','Completed','Delivered','Cancelled'] %}<option value="{{ value }}" {% if repair and repair.status == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+                <div><label class="field-label">Estimated Amount</label><input name="estimated_amount" type="number" min="0" step="0.01" value="{{ repair.estimated_amount if repair else '0.00' }}" class="field-input"></div>
+                <div><label class="field-label">Final Amount</label><input name="final_amount" type="number" min="0" step="0.01" value="{{ repair.final_amount if repair else '0.00' }}" class="field-input"></div>
+                <div><label class="field-label">Amount Paid</label><input name="amount_paid" type="number" min="0" step="0.01" value="{{ repair.amount_paid if repair else '0.00' }}" class="field-input"></div>
+                <div><label class="field-label">Payment Status</label><select name="payment_status" class="field-input">{% for value in ['Unpaid','Partially Paid','Paid','Refunded'] %}<option value="{{ value }}" {% if repair and repair.payment_status == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+                <div><label class="field-label">Payment Method</label><input name="payment_method" placeholder="Cash / UPI / Card" value="{{ repair.payment_method if repair else '' }}" class="field-input"></div>
+                <div><label class="field-label">Warranty Days</label><input name="warranty_days" type="number" min="0" value="{{ repair.warranty_days if repair else 0 }}" class="field-input"></div>
+                <div class="flex items-center gap-3 pt-8"><input id="customer_approved" name="customer_approved" type="checkbox" {% if repair and repair.customer_approved %}checked{% endif %}><label for="customer_approved" class="text-sm">Customer approved estimate</label></div>
             </div>
+
             <div class="pt-4 flex gap-4">
                 <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition shadow-md">Save Order</button>
                 <a href="{{ url_for('repair.list_repairs') }}" class="px-6 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition">Cancel</a>
@@ -42,4 +82,5 @@
         </form>
     </div>
 </div>
+<style>.field-label{display:block;font-size:.875rem;font-weight:500;margin-bottom:.5rem}.field-input{width:100%;padding:.55rem 1rem;border-radius:.5rem;border:1px solid #cbd5e1;background:#f8fafc}.dark .field-input{background:#1e293b;border-color:#334155;color:#fff}</style>
 {% endblock %}
