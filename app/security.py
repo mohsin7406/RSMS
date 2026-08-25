@@ -2,9 +2,7 @@ import secrets
 from functools import wraps
 from hmac import compare_digest
 
-from flask import abort, g, redirect, request, session, url_for
-from flask import current_app
-from flask import render_template
+from flask import abort, current_app, g, redirect, render_template, request, session, url_for
 
 from app.models import User
 
@@ -23,7 +21,6 @@ def get_csrf_token() -> str:
 def validate_csrf() -> None:
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
         return
-
     supplied = request.form.get("csrf_token") or request.headers.get("X-CSRFToken")
     expected = session.get(CSRF_SESSION_KEY)
     if not supplied or not expected or not compare_digest(supplied, expected):
@@ -35,19 +32,21 @@ def load_current_user() -> None:
     g.current_user = User.query.get(user_id) if user_id else None
 
 
+def current_user_id():
+    return g.current_user.id if g.current_user else None
+
+
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if g.current_user is None:
             return redirect(url_for("auth.login", next=request.full_path))
         return view(*args, **kwargs)
-
     return wrapped
 
 
 def role_required(*roles):
     allowed = set(roles)
-
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
@@ -56,9 +55,7 @@ def role_required(*roles):
             if g.current_user.role not in allowed:
                 abort(403)
             return view(*args, **kwargs)
-
         return wrapped
-
     return decorator
 
 
@@ -77,15 +74,9 @@ def register_security(app):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault(
-            "Permissions-Policy",
-            "camera=(), microphone=(), geolocation=()",
-        )
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         if current_app.config.get("SESSION_COOKIE_SECURE"):
-            response.headers.setdefault(
-                "Strict-Transport-Security",
-                "max-age=31536000; includeSubDomains",
-            )
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
 
     @app.errorhandler(400)
