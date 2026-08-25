@@ -5,11 +5,16 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from sqlalchemy import or_
 
 from app.extensions import db
-from app.models import Customer, RepairOrder
+from app.models import Customer, RepairOrder, RepairAuditLog
 from app.models.repair import REPAIR_STATUSES, PAYMENT_STATUSES
 from app.security import login_required, role_required
 
 repair_bp = Blueprint("repair", __name__, url_prefix="/repairs")
+
+
+def _audit(repair, action, old_value=None, new_value=None):
+    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    db.session.add(RepairAuditLog(repair=repair, user_id=user_id, action=action, old_value=old_value, new_value=new_value))
 
 
 def _money(value):
@@ -97,6 +102,8 @@ def add_repair():
         values["job_number"] = _new_job_number()
         repair = RepairOrder(**values)
         db.session.add(repair)
+        db.session.flush()
+        _audit(repair, "created", None, repair.job_number)
         db.session.commit()
         flash(f"Repair order {repair.job_number} created", "success")
         return redirect(url_for("repair.view_repair", id=repair.id))
@@ -115,7 +122,10 @@ def edit_repair(id):
             flash(error, "error")
             return render_template("repairs/form.html", repair=repair, customers=customers, action="Edit")
         for key, value in values.items():
-            setattr(repair, key, value)
+            old = getattr(repair, key)
+            if old != value:
+                _audit(repair, key, str(old), str(value))
+                setattr(repair, key, value)
         db.session.commit()
         flash("Repair order updated", "success")
         return redirect(url_for("repair.view_repair", id=id))
@@ -127,6 +137,7 @@ def edit_repair(id):
 def delete_repair(id):
     repair = RepairOrder.query.get_or_404(id)
     repair.deleted_at = datetime.utcnow()
+    _audit(repair, "archived", None, repair.deleted_at.isoformat())
     db.session.commit()
     flash("Repair order archived", "success")
     return redirect(url_for("repair.list_repairs"))
@@ -137,6 +148,14 @@ def delete_repair(id):
 def view_repair(id):
     repair = RepairOrder.query.filter(RepairOrder.id == id, RepairOrder.deleted_at.is_(None)).first_or_404()
     return render_template("repairs/detail.html", repair=repair)
+
+
+@repair_bp.route("/audit/<int:id>")
+@role_required("admin", "staff")
+def repair_audit(id):
+    repair = RepairOrder.query.get_or_404(id)
+    logs = repair.audit_logs.order_by(RepairAuditLog.created_at.desc()).all()
+    return render_template("repairs/audit.html", repair=repair, logs=logs)
 
 
 @repair_bp.route("/customer/<int:customer_id>")
@@ -165,9 +184,12 @@ def update_repair_status(id):
     if new_status not in REPAIR_STATUSES:
         flash("Invalid repair status", "error")
         return redirect(url_for("repair.view_repair", id=id))
-    repair.status = new_status
-    if new_status == "Delivered" and repair.delivered_at is None:
-        repair.delivered_at = datetime.utcnow()
+    old_status = repair.status
+    if old_status != new_status:
+        repair.status = new_status
+        if new_status == "Delivered" and repair.delivered_at is None:
+            repair.delivered_at = datetime.utcnow()
+        _audit(repair, "status_changed", old_status, new_status)
     db.session.commit()
     flash("Repair order status updated", "success")
     return redirect(url_for("repair.view_repair", id=id))
