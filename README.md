@@ -1,101 +1,82 @@
- 
 # Repair Shop Management System
 
-A lightweight, budget-friendly **repair shop management system** built with Python Flask and TailwindCSS.  
-This project is a live build-in-public, aimed at small or mid-size repair shops looking for a practical solution to manage jobs, customers, and invoices — with optional AI-powered invoice OCR.
+RSMS is a Flask-based repair shop management system for customers, repair orders, workflow tracking and future repair-shop automation.
 
- 
+## Current stack
 
-## Features
+- Python 3.12+
+- Flask
+- Flask-SQLAlchemy
+- Flask-Migrate / Alembic
+- PostgreSQL in production
+- Gunicorn
+- TailwindCSS / Alpine.js frontend
+- Flask-Limiter for rate limiting
 
-- **Landing Page** – TailwindCSS-based, responsive and clean.
-- **Authentication** – Simple login flow with SQLite database.
-- **Job & Customer Tracking** – Placeholder for managing repair jobs and customer records.
-- **Invoice OCR (Optional)** – Upload invoices and extract data automatically.
-- **Small Budget Friendly** – Lightweight and easy to extend.
+## Production security baseline
 
----
+- Production requires `SECRET_KEY`, `DATABASE_URL` and shared `RATELIMIT_STORAGE_URI`.
+- Session cookies are HTTP-only, SameSite=Lax and Secure by default in production.
+- State-changing requests require a CSRF token.
+- Login is rate limited.
+- Public self-registration is disabled; administrators create staff accounts.
+- Role-based authorization is enforced on sensitive operations.
+- Demo database seeding is disabled unless explicitly enabled.
+- Local SQLite databases are excluded from source control.
+- Database migrations are version controlled.
+- Security response headers are enabled.
 
-## Project Structure
-
-```
-
-repair_app/
-│
-├─ app/
-│   ├─ **init**.py           # app factory
-│   ├─ config.py             # configuration
-│   ├─ extensions.py         # db instance
-│   ├─ models.py             # User model
-│   ├─ routes/
-│   │   ├─ **init**.py
-│   │   ├─ main.py           # landing page routes
-│   │   └─ auth.py           # login routes
-│   └─ templates/
-│       ├─ base.html
-│       ├─ index.html
-│       └─ login.html
-├─ run.py                    # entry point
-└─ requirements.txt
-
-````
-
----
-
-## Setup Instructions
-
-1. **Clone the repo**
-```bash
-git clone https://github.com/yourusername/repair-shop-system.git
-cd repair-shop-system
-````
-
-2. **Create a virtual environment**
+## Local development
 
 ```bash
-python -m venv venv
-source venv/bin/activate   # Linux / Mac
-venv\Scripts\activate      # Windows
-```
-
-3. **Install dependencies**
-
-```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-4. **Run the app**
-
-```bash
+cp .env.example .env
+export FLASK_ENV=development
 python run.py
 ```
 
-5. **Visit in browser**
+Development can use SQLite and in-memory rate limiting.
 
+## Production configuration
+
+Set the following environment variables using your deployment secret manager or service configuration. Do not commit `.env` files or passwords.
+
+```text
+FLASK_ENV=production
+SECRET_KEY=<long-random-secret>
+DATABASE_URL=postgresql+psycopg://rsms:<password>@127.0.0.1:5432/rsms
+RATELIMIT_STORAGE_URI=redis://127.0.0.1:6379/1
+SESSION_COOKIE_SECURE=true
 ```
-http://127.0.0.1:5000/
+
+Run database migrations before starting the application:
+
+```bash
+flask --app run.py db upgrade
 ```
 
-* `/` → Landing page
-* `/auth/login` → Login page
+Create the first administrator with environment variables `ADMIN_EMAIL` and `ADMIN_PASSWORD` and then run:
 
----
+```bash
+flask --app run.py create-admin
+```
 
-## Tech Stack
+Start the production server behind Nginx or another TLS-terminating reverse proxy:
 
-* **Backend:** Python, Flask
-* **Database:** SQLite
-* **Frontend:** TailwindCSS
-* **Extras:** Blueprint structure, modular and easy to extend
+```bash
+gunicorn --config gunicorn.conf.py run:app
+```
 
----
+## Testing
 
+```bash
+pytest -q
+```
 
-## Contributing / Freelance Use
+CI runs the test suite on pushes to the main and production-hardening branches and on pull requests targeting main.
 
-This project is structured for **small-business usage** and is still in progress.
-If you’re a small repair shop owner and want a **custom version**, feel free to contact via email in the landing page.
+## Important
 
-Contributions are welcome! Please fork and create pull requests for improvements, especially around authentication, dashboard, and OCR modules.
-
- 
+Do not run demo seed commands against a production database. `seed-db` and `seed-db-all` require `ALLOW_DEMO_SEED=true` explicitly.
