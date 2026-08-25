@@ -2,5 +2,8 @@ from app.models.user import User
 from app.models.customer import Customer
 from app.models.repair import RepairOrder
 from app.models.repair_audit import RepairAuditLog
+from app.models.part import Part
+from app.models.part_usage import PartUsage
+from app.models.stock_movement import StockMovement
 
-__all__ = ["User", "Customer", "RepairOrder", "RepairAuditLog"]
+__all__ = ["User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage", "StockMovement"]
