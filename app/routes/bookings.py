@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for, g
 
 from app.extensions import db
 from app.models import Booking, User
@@ -35,14 +35,10 @@ def add_booking():
             flash("Invalid scheduled date and time", "error")
             return render_template("bookings/form.html", technicians=technicians)
         booking = Booking(
-            booking_number=_booking_number(),
-            customer_id=request.form.get("customer_id", type=int),
-            technician_id=request.form.get("technician_id", type=int),
-            service_type=request.form.get("service_type", "Doorstep"),
-            scheduled_at=scheduled_at,
-            address=request.form.get("address", "").strip() or None,
-            area=request.form.get("area", "").strip() or None,
-            notes=request.form.get("notes", "").strip() or None,
+            booking_number=_booking_number(), customer_id=request.form.get("customer_id", type=int),
+            technician_id=request.form.get("technician_id", type=int), service_type=request.form.get("service_type", "Doorstep"),
+            scheduled_at=scheduled_at, address=request.form.get("address", "").strip() or None,
+            area=request.form.get("area", "").strip() or None, notes=request.form.get("notes", "").strip() or None,
             status="Assigned" if request.form.get("technician_id", type=int) else "Scheduled",
         )
         if not booking.customer_id:
@@ -63,7 +59,7 @@ def update_status(id):
     if status not in BOOKING_STATUSES:
         flash("Invalid booking status", "error")
         return redirect(url_for("bookings.list_bookings"))
-    if current_user_id() != booking.technician_id and booking.technician_id and getattr(request, "current_user", None) and request.current_user.role == "technician":
+    if g.current_user and g.current_user.role == "technician" and booking.technician_id != current_user_id():
         return ("Forbidden", 403)
     booking.status = status
     db.session.commit()
