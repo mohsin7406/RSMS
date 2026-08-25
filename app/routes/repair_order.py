@@ -7,14 +7,13 @@ from sqlalchemy import or_
 from app.extensions import db
 from app.models import Customer, RepairOrder, RepairAuditLog, Part, PartUsage, StockMovement
 from app.models.repair import REPAIR_STATUSES, PAYMENT_STATUSES
-from app.security import login_required, role_required
+from app.security import current_user_id, login_required, role_required
 
 repair_bp = Blueprint("repair", __name__, url_prefix="/repairs")
 
 
 def _audit(repair, action, old_value=None, new_value=None):
-    user_id = request.session.get("user_id") if hasattr(request, "session") else None
-    db.session.add(RepairAuditLog(repair=repair, user_id=user_id, action=action, old_value=old_value, new_value=new_value))
+    db.session.add(RepairAuditLog(repair=repair, user_id=current_user_id(), action=action, old_value=old_value, new_value=new_value))
 
 
 def _money(value):
@@ -154,9 +153,8 @@ def add_part_to_repair(repair_id):
     unit_cost = part.cost_price; unit_price = _money(request.form.get("unit_price")) or part.selling_price
     try:
         part.quantity -= quantity
-        usage = PartUsage(repair_id=repair.id, part_id=part.id, quantity=quantity, unit_cost=unit_cost, unit_price=unit_price)
-        db.session.add(usage)
-        db.session.add(StockMovement(part_id=part.id, user_id=None, movement_type="OUT", quantity=quantity, reference=repair.job_number, notes="Used on repair"))
+        db.session.add(PartUsage(repair_id=repair.id, part_id=part.id, quantity=quantity, unit_cost=unit_cost, unit_price=unit_price))
+        db.session.add(StockMovement(part_id=part.id, user_id=current_user_id(), movement_type="OUT", quantity=quantity, reference=repair.job_number, notes="Used on repair"))
         _audit(repair, "part_added", None, f"{part.sku} x {quantity}")
         db.session.commit()
     except Exception:
