@@ -1,62 +1,84 @@
-from sqlite3 import IntegrityError
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from app.models import Customer
+from sqlalchemy.exc import IntegrityError
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+
 from app.extensions import db
+from app.models import Customer
+from app.security import login_required, role_required
+
 
 customer_bp = Blueprint("customer", __name__, url_prefix="/customer")
 
+
+def _customer_form_values():
+    return {
+        "name": request.form.get("name", "").strip(),
+        "email": request.form.get("email", "").strip().lower() or None,
+        "phone": request.form.get("phone", "").strip(),
+    }
+
+
 @customer_bp.route("/add", methods=["GET", "POST"])
+@login_required
 def add_customer():
-    if "user_id" not in session:
-        return redirect(url_for("auth.login"))
-
     if request.method == "POST":
-        email = request.form["email"]
-
-        if Customer.query.filter_by(email=email).first():
-            flash("Customer already exists", "error")
+        values = _customer_form_values()
+        if not values["name"] or not values["phone"]:
+            flash("Name and phone are required", "error")
             return render_template("customers/form.html", action="Add")
 
-        customer = Customer(
-            name=request.form["name"],
-            email=email,
-            phone=request.form["phone"]
-        )
+        if values["email"] and Customer.query.filter_by(email=values["email"]).first():
+            flash("Customer email already exists", "error")
+            return render_template("customers/form.html", action="Add")
 
+        customer = Customer(**values)
         db.session.add(customer)
         try:
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
-            flash("Email already exists", "error")
+            flash("Customer could not be created", "error")
             return render_template("customers/form.html", action="Add")
+
+        flash("Customer created successfully", "success")
+        return redirect(url_for("customer.view_customers"))
 
     return render_template("customers/form.html", action="Add")
 
 
-# Edit Customer
 @customer_bp.route("/edit/<int:id>", methods=["GET", "POST"])
+@login_required
 def edit_customer(id):
-    if "user_id" not in session:
-        return redirect(url_for("auth.login"))
-
     customer = Customer.query.get_or_404(id)
 
     if request.method == "POST":
-        customer.name = request.form["name"]
-        customer.email = request.form["email"]
-        customer.phone = request.form["phone"]
+        values = _customer_form_values()
+        if not values["name"] or not values["phone"]:
+            flash("Name and phone are required", "error")
+            return render_template("customers/form.html", action="Edit", customer=customer)
+
+        duplicate = Customer.query.filter(
+            Customer.email == values["email"], Customer.id != customer.id
+        ).first() if values["email"] else None
+        if duplicate:
+            flash("Customer email already exists", "error")
+            return render_template("customers/form.html", action="Edit", customer=customer)
+
+        customer.name = values["name"]
+        customer.email = values["email"]
+        customer.phone = values["phone"]
         db.session.commit()
         flash("Customer updated successfully", "success")
-        return redirect(url_for("main.dashboard"))
+        return redirect(url_for("customer.view_customers"))
 
     return render_template("customers/form.html", action="Edit", customer=customer)
 
+
 @customer_bp.route("/delete/<int:id>", methods=["POST"])
+@role_required("admin")
 def delete_customer(id):
     customer = Customer.query.get_or_404(id)
-    if customer.repair_orders:  # assuming relationship
-        flash("Cannot delete customer with existing repair orders", "error")
+    if customer.repair_orders:
+        flash("Cannot delete a customer with existing repair orders", "error")
         return redirect(url_for("customer.view_customers"))
 
     db.session.delete(customer)
@@ -65,21 +87,15 @@ def delete_customer(id):
     return redirect(url_for("customer.view_customers"))
 
 
-#view customers route
 @customer_bp.route("/view", methods=["GET"])
+@login_required
 def view_customers():
-    if "user_id" not in session:
-        return redirect(url_for("auth.login"))
-
-    customers = Customer.query.all()
+    customers = Customer.query.order_by(Customer.created_at.desc()).all()
     return render_template("customers/list.html", customers=customers)
 
 
-# Customer Details
 @customer_bp.route("/details/<int:id>", methods=["GET"])
+@login_required
 def customer_details(id):
-    if "user_id" not in session:
-        return redirect(url_for("auth.login"))
-
     customer = Customer.query.get_or_404(id)
     return render_template("customers/detail.html", customer=customer)
