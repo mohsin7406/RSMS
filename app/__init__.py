@@ -9,7 +9,6 @@ from app.security import register_security
 
 def create_app(config_name=None):
     app = Flask(__name__)
-
     config_name = config_name or os.environ.get("FLASK_ENV", "production")
     config_class = config_by_name.get(config_name, config_by_name["production"])
     app.config.from_object(config_class)
@@ -19,6 +18,8 @@ def create_app(config_name=None):
             raise RuntimeError("SECRET_KEY must be set in production")
         if not app.config.get("SQLALCHEMY_DATABASE_URI"):
             raise RuntimeError("DATABASE_URL must be set in production")
+        if not app.config.get("RATELIMIT_STORAGE_URI"):
+            raise RuntimeError("RATELIMIT_STORAGE_URI must be set in production")
 
     db.init_app(app)
     migrate.init_app(app, db)
