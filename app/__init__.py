@@ -32,6 +32,8 @@ def create_app(config_name=None):
     from app.routes.repair_order import repair_bp
     from app.routes.inventory import inventory_bp
     from app.routes.billing import billing_bp
+    from app.routes.qc import qc_bp
+    from app.routes.warranty import warranty_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -39,6 +41,8 @@ def create_app(config_name=None):
     app.register_blueprint(repair_bp)
     app.register_blueprint(inventory_bp)
     app.register_blueprint(billing_bp)
+    app.register_blueprint(qc_bp)
+    app.register_blueprint(warranty_bp)
 
     from app.commands import create_admin, seed_db, seed_db_all
     app.cli.add_command(create_admin)
