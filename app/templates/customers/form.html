@@ -3,39 +3,15 @@
 {% block content %}
 <section class="max-w-md mx-auto px-6 py-20">
     <div class="bg-white dark:bg-slate-900 shadow-lg rounded-xl p-8 transition-colors duration-300">
-        <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6">
-            {{ action }} Customer
-        </h2>
-
+        <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6">{{ action }} Customer</h2>
         <form method="post" class="space-y-4">
-            <input name="name" placeholder="Name" required
-                   value="{{ customer.name if customer else '' }}"
-                   class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700
-                          bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                          focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors duration-200">
-
-            <input name="email" placeholder="Email" type="email"
-                   value="{{ customer.email if customer else '' }}"
-                   class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700
-                          bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                          focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors duration-200">
-
-            <input name="phone" placeholder="Phone"
-                   value="{{ customer.phone if customer else '' }}"
-                   class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700
-                          bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                          focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors duration-200">
-
-            <button class="w-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500
-                           text-white font-semibold py-2 rounded-lg transition-colors duration-200">
-                {{ action }} Customer
-            </button>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input name="name" placeholder="Name" required value="{{ customer.name if customer else '' }}" class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors duration-200">
+            <input name="email" placeholder="Email" type="email" value="{{ customer.email if customer else '' }}" class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors duration-200">
+            <input name="phone" placeholder="Phone" required value="{{ customer.phone if customer else '' }}" class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors duration-200">
+            <button class="w-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-semibold py-2 rounded-lg transition-colors duration-200">{{ action }} Customer</button>
         </form>
-        <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
-            <a href="{{ url_for('main.dashboard') }}" class="text-blue-500 dark:text-blue-400 hover:underline">
-                Back to Dashboard
-            </a>
-        </p>
+        <p class="mt-4 text-sm text-slate-600 dark:text-slate-400"><a href="{{ url_for('main.dashboard') }}" class="text-blue-500 dark:text-blue-400 hover:underline">Back to Dashboard</a></p>
     </div>
 </section>
 {% endblock %}
