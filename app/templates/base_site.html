@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Welcome | Repair OS</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>tailwind.config = { darkMode: 'class' }</script>
 </head>
@@ -24,5 +25,20 @@
     <footer class="max-w-7xl mx-auto px-6 py-12 mt-20 border-t border-slate-100 dark:border-slate-900 text-center text-sm text-slate-500">
         Built for small businesses • © 2026 Repair OS
     </footer>
+
+    <script>
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (csrfToken) {
+            document.querySelectorAll('form[method="post"], form[method="POST"], form[method="put"], form[method="PUT"], form[method="patch"], form[method="PATCH"], form[method="delete"], form[method="DELETE"]').forEach((form) => {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfToken;
+                    form.appendChild(input);
+                }
+            });
+        }
+    </script>
 </body>
 </html>
