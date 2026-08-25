@@ -4,9 +4,10 @@ from hashlib import sha256
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import RepairOrder, RepairCustomerConfirmation
 from app.security import role_required, current_user_id
+from app.services.notifications import notify_customer
 
 customer_status_bp = Blueprint("customer_status", __name__, url_prefix="/customer-status")
 OTP_TTL_MINUTES = 10
@@ -39,11 +40,14 @@ def request_otp(repair_id):
     confirmation.cancelled_at = None
     db.session.add(confirmation)
     db.session.commit()
-    flash("OTP generated. Connect the SMS/WhatsApp provider to deliver it to the customer.", "success")
+    message = f"FixZone confirmation OTP for {repair.job_number}: {otp}. Valid for {OTP_TTL_MINUTES} minutes."
+    notify_customer(repair.customer.phone, message)
+    flash("Customer confirmation OTP requested", "success")
     return redirect(url_for("customer_status.repair_status", repair_id=repair.id))
 
 
 @customer_status_bp.route("/repair/<int:repair_id>/verify", methods=["POST"])
+@limiter.limit("5 per 10 minutes")
 def verify(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id, deleted_at=None).first_or_404()
     confirmation = repair.customer_confirmation
