@@ -18,9 +18,10 @@ def home():
 @login_required
 def dashboard():
     total_customers = Customer.query.count()
-    total_repairs = RepairOrder.query.count()
-    pending_repairs = RepairOrder.query.filter_by(status="Pending").count()
-    recent_repairs = RepairOrder.query.order_by(RepairOrder.created_at.desc()).limit(5).all()
+    active_repairs = RepairOrder.query.filter(RepairOrder.deleted_at.is_(None))
+    total_repairs = active_repairs.count()
+    pending_repairs = active_repairs.filter(RepairOrder.status.in_(["Pending", "Received", "Diagnosing", "Waiting Approval", "Approved", "Waiting Parts", "In Progress", "In Repair", "QC", "Ready"])).count()
+    recent_repairs = active_repairs.order_by(RepairOrder.created_at.desc()).limit(5).all()
 
     return render_template(
         "dashboard.html",
