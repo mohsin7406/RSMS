@@ -11,9 +11,11 @@ REPAIR_STATUSES = (
     "Waiting Approval",
     "Approved",
     "Waiting Parts",
+    "In Progress",
     "In Repair",
     "QC",
     "Ready",
+    "Completed",
     "Delivered",
     "Cancelled",
 )
