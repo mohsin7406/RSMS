@@ -1,0 +1,39 @@
+name: Smoke
+
+on:
+  push:
+    branches: [production-hardening]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: python -m compileall -q app tests
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Import application
+        env:
+          FLASK_ENV: testing
+          SECRET_KEY: smoke-test-secret
+          DATABASE_URL: sqlite:///:memory:
+          SESSION_COOKIE_SECURE: "false"
+        run: python -c "from app import create_app; app=create_app('testing'); print(app.url_map)"
+      - name: Test suite
+        env:
+          FLASK_ENV: testing
+          SECRET_KEY: smoke-test-secret
+          DATABASE_URL: sqlite:///:memory:
+          SESSION_COOKIE_SECURE: "false"
+        run: pytest -q
