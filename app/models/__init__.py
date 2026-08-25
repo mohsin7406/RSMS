@@ -9,8 +9,10 @@ from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.qc import RepairQC
 from app.models.warranty_claim import WarrantyClaim
+from app.models.lead import Lead
+from app.models.booking import Booking
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage",
-    "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim",
+    "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "Booking",
 ]
