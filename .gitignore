@@ -15,6 +15,7 @@ instance/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Local databases
 *.db
