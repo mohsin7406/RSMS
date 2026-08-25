@@ -1,13 +1,29 @@
-from flask import Flask
-from app.config import Config
-from app.extensions import db,migrate
+import os
 
-def create_app():
+from flask import Flask
+
+from app.config import config_by_name
+from app.extensions import db, limiter, migrate
+from app.security import register_security
+
+
+def create_app(config_name=None):
     app = Flask(__name__)
-    app.config.from_object(Config)
+
+    config_name = config_name or os.environ.get("FLASK_ENV", "production")
+    config_class = config_by_name.get(config_name, config_by_name["production"])
+    app.config.from_object(config_class)
+
+    if config_name == "production":
+        if not app.config.get("SECRET_KEY"):
+            raise RuntimeError("SECRET_KEY must be set in production")
+        if not app.config.get("SQLALCHEMY_DATABASE_URI"):
+            raise RuntimeError("DATABASE_URL must be set in production")
 
     db.init_app(app)
     migrate.init_app(app, db)
+    limiter.init_app(app)
+    register_security(app)
 
     from app.routes.main import main_bp
     from app.routes.auth import auth_bp
@@ -18,11 +34,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(customer_bp)
     app.register_blueprint(repair_bp)
-    # Uncomment the following lines to create database tables on app startup , currently we using flask-migrations 
-    # Migrations will manage schema.
-    # with app.app_context():  
-    #     db.create_all()
-    
+
     from app.commands import seed_db, seed_db_all
     app.cli.add_command(seed_db_all)
     app.cli.add_command(seed_db)
