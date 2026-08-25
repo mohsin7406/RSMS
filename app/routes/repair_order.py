@@ -7,6 +7,7 @@ from sqlalchemy import or_
 from app.extensions import db
 from app.models import Customer, RepairOrder, RepairAuditLog, Part, PartUsage, StockMovement
 from app.models.repair import REPAIR_STATUSES, PAYMENT_STATUSES
+from app.models.qc import RepairQC
 from app.security import current_user_id, login_required, role_required
 
 repair_bp = Blueprint("repair", __name__, url_prefix="/repairs")
@@ -53,6 +54,14 @@ def _new_job_number():
     latest = RepairOrder.query.filter(RepairOrder.job_number.like(f"{prefix}-%")).order_by(RepairOrder.id.desc()).first()
     sequence = int(latest.job_number.rsplit("-", 1)[-1]) + 1 if latest and latest.job_number.rsplit("-", 1)[-1].isdigit() else 1
     return f"{prefix}-{sequence:04d}"
+
+
+def _delivery_allowed(repair):
+    if repair.status != "Ready":
+        return False, "Repair must pass QC before delivery"
+    if repair.final_amount > 0 and repair.payment_status != "Paid":
+        return False, "Invoice must be fully paid before delivery"
+    return True, None
 
 
 @repair_bp.route("/")
@@ -104,7 +113,8 @@ def delete_repair(id):
 @login_required
 def view_repair(id):
     repair = RepairOrder.query.filter(RepairOrder.id == id, RepairOrder.deleted_at.is_(None)).first_or_404()
-    return render_template("repairs/detail.html", repair=repair)
+    qc = RepairQC.query.filter_by(repair_id=repair.id).first()
+    return render_template("repairs/detail.html", repair=repair, qc=qc)
 
 
 @repair_bp.route("/audit/<int:id>")
@@ -134,6 +144,11 @@ def repairs_by_status(status):
 def update_repair_status(id):
     repair = RepairOrder.query.filter(RepairOrder.id == id, RepairOrder.deleted_at.is_(None)).first_or_404(); new_status = request.form.get("status", "")
     if new_status not in REPAIR_STATUSES: flash("Invalid repair status", "error"); return redirect(url_for("repair.view_repair", id=id))
+    if new_status == "Delivered":
+        allowed, reason = _delivery_allowed(repair)
+        if not allowed:
+            flash(reason, "error")
+            return redirect(url_for("repair.view_repair", id=id))
     old_status = repair.status
     if old_status != new_status:
         repair.status = new_status
