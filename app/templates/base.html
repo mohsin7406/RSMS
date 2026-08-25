@@ -4,76 +4,39 @@
     <meta charset="UTF-8">
     <title>{{ title if title else "Repair Shop OS" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class'
-        }
+        tailwind.config = { darkMode: 'class' }
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 font-sans antialiased selection:bg-blue-500 selection:text-white">
 
 <div class="flex h-screen overflow-hidden">
-
-    <aside class="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 flex-shrink-0 transition-all">
+    <aside class="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 flex-shrink-0">
         <div class="h-16 flex items-center px-6 border-b border-slate-800">
             <span class="text-xl font-bold text-white tracking-wider">REPAIR OS</span>
         </div>
-
         <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-            <a href="{{ url_for('main.dashboard') }}" 
-               class="flex items-center px-3 py-2.5 rounded-lg transition-colors group
-               {% if request.endpoint == 'main.dashboard' %}bg-slate-800 text-white shadow-lg shadow-blue-900/20{% else %}hover:bg-slate-800 hover:text-white{% endif %}">
-                <svg class="w-5 h-5 mr-3 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-                Dashboard
-            </a>
-
-            <a href="{{ url_for('repair.list_repairs') }}" 
-               class="flex items-center px-3 py-2.5 rounded-lg transition-colors group
-               {% if 'repair' in request.endpoint %}bg-slate-800 text-white shadow-lg shadow-blue-900/20{% else %}hover:bg-slate-800 hover:text-white{% endif %}">
-                <svg class="w-5 h-5 mr-3 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                Repairs
-            </a>
-
-            <a href="{{ url_for('customer.view_customers') }}" 
-               class="flex items-center px-3 py-2.5 rounded-lg transition-colors group
-               {% if 'customer' in request.endpoint %}bg-slate-800 text-white shadow-lg shadow-blue-900/20{% else %}hover:bg-slate-800 hover:text-white{% endif %}">
-                <svg class="w-5 h-5 mr-3 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                Customers
-            </a>
+            <a href="{{ url_for('main.dashboard') }}" class="flex items-center px-3 py-2.5 rounded-lg {% if request.endpoint == 'main.dashboard' %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Dashboard</a>
+            <a href="{{ url_for('repair.list_repairs') }}" class="flex items-center px-3 py-2.5 rounded-lg {% if request.endpoint and 'repair' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Repairs</a>
+            <a href="{{ url_for('customer.view_customers') }}" class="flex items-center px-3 py-2.5 rounded-lg {% if request.endpoint and 'customer' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Customers</a>
         </nav>
-
         <div class="p-4 border-t border-slate-800">
-            <p class="text-xs text-slate-500 mb-2">Logged in as Admin</p>
-            <a href="{{ url_for('auth.logout') }}" class="flex items-center text-sm text-slate-400 hover:text-white transition">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                Sign Out
-            </a>
+            <p class="text-xs text-slate-500 mb-2">Logged in as {{ current_user.role if current_user else 'Guest' }}</p>
+            {% if current_user %}
+            <a href="{{ url_for('auth.logout') }}" class="text-sm text-slate-400 hover:text-white">Sign Out</a>
+            {% endif %}
         </div>
     </aside>
 
     <div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-        
         <header class="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-            
+            <h1 class="text-lg font-bold">Repair OS</h1>
             <div class="flex items-center gap-4">
-                <button class="md:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                </button>
-                <h1 class="text-lg font-bold md:hidden">Repair OS</h1>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <button id="theme-toggle" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:ring-2 ring-slate-400 transition-all">
-                    <span class="dark:hidden flex items-center gap-2 text-xs font-medium"><span class="text-lg">🌙</span></span>
-                    <span class="hidden dark:flex items-center gap-2 text-xs font-medium"><span class="text-lg">☀️</span></span>
-                </button>
-                
-                <div class="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm shadow-md">
-                   A
-                </div>
+                <button id="theme-toggle" type="button" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">🌓</button>
             </div>
         </header>
 
@@ -81,23 +44,7 @@
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                    <div x-data="{ show: true }" x-show="show" 
-                         x-transition:enter="transition ease-out duration-300"
-                         x-transition:enter-start="opacity-0 translate-x-2"
-                         x-transition:enter-end="opacity-100 translate-x-0"
-                         x-transition:leave="transition ease-in duration-300"
-                         x-transition:leave-start="opacity-100 translate-x-0"
-                         x-transition:leave-end="opacity-0 translate-x-2"
-                         x-init="setTimeout(() => show = false, 4000)"
-                         class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl text-white min-w-[300px] border border-white/10 backdrop-blur-sm
-                                {% if category == 'success' %}bg-green-600/90
-                                {% elif category == 'error' %}bg-red-600/90
-                                {% elif category == 'warning' %}bg-yellow-500/90
-                                {% else %}bg-blue-600/90{% endif %}">
-                        
-                        <span>
-                            {% if category == 'success' %}✓{% elif category == 'error' %}✕{% else %}ℹ{% endif %}
-                        </span>
+                    <div class="pointer-events-auto px-4 py-3 rounded-lg shadow-xl text-white min-w-[300px] {% if category == 'success' %}bg-green-600/90{% elif category == 'error' %}bg-red-600/90{% elif category == 'warning' %}bg-yellow-500/90{% else %}bg-blue-600/90{% endif %}">
                         <p class="text-sm font-medium">{{ message }}</p>
                     </div>
                     {% endfor %}
@@ -109,33 +56,31 @@
             {% block content %}{% endblock %}
         </main>
 
-        <footer class="border-t border-slate-200 dark:border-slate-800 p-6 text-center text-xs text-slate-500">
-            &copy; 2024 Repair OS. Built for efficiency.
-        </footer>
+        <footer class="border-t border-slate-200 dark:border-slate-800 p-6 text-center text-xs text-slate-500">&copy; 2026 Repair OS</footer>
     </div>
 </div>
 
 <script>
-    const btn = document.getElementById('theme-toggle');
-    const html = document.documentElement;
-
-    // Check for saved preference
-    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        html.classList.add('dark');
-    } else {
-        html.classList.remove('dark');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (csrfToken) {
+        document.querySelectorAll('form[method="post"], form[method="POST"], form[method="put"], form[method="PUT"], form[method="patch"], form[method="PATCH"], form[method="delete"], form[method="DELETE"]').forEach((form) => {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = csrfToken;
+                form.appendChild(input);
+            }
+        });
     }
 
-    btn.addEventListener('click', () => {
-        if (html.classList.contains('dark')) {
-            html.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        } else {
-            html.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        }
+    const btn = document.getElementById('theme-toggle');
+    const html = document.documentElement;
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) html.classList.add('dark');
+    btn?.addEventListener('click', () => {
+        html.classList.toggle('dark');
+        localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
     });
 </script>
-
 </body>
 </html>
