@@ -11,8 +11,11 @@ from app.models.qc import RepairQC
 from app.models.warranty_claim import WarrantyClaim
 from app.models.lead import Lead
 from app.models.booking import Booking
+from app.models.service_confirmation import ServiceConfirmation
+from app.models.repair_photo import RepairPhoto
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage",
     "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "Booking",
+    "ServiceConfirmation", "RepairPhoto",
 ]
