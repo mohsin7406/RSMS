@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+  <div><h1 class="text-3xl font-bold">Technician Dashboard</h1><p class="text-slate-500">Your assigned bookings and repair jobs</p></div>
+
+  <section class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+    <h2 class="font-bold text-lg mb-4">Today's / Upcoming Bookings</h2>
+    <div class="space-y-3">
+      {% for booking in bookings %}
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b last:border-0 pb-3">
+        <div><div class="font-medium">{{ booking.booking_number }} · {{ booking.customer.name }}</div><div class="text-sm text-slate-500">{{ booking.scheduled_at.strftime('%d %b %Y %I:%M %p') }} · {{ booking.service_type }}</div><div class="text-sm text-slate-500">{{ booking.address or '' }}{% if booking.area %} · {{ booking.area }}{% endif %}</div></div>
+        <form method="post" action="{{ url_for('technician.booking_status', id=booking.id) }}" class="flex gap-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><select name="status" class="px-3 py-2 border rounded"><option>{{ booking.status }}</option><option>On The Way</option><option>Started</option><option>Completed</option><option>Cancelled</option><option>Rescheduled</option></select><button class="px-3 py-2 bg-slate-900 text-white rounded">Update</button></form>
+      </div>
+      {% else %}<p class="text-slate-500">No bookings assigned.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+    <h2 class="font-bold text-lg mb-4">Assigned Repair Jobs</h2>
+    <div class="space-y-3">
+      {% for repair in repairs %}
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b last:border-0 pb-3">
+        <div><div class="font-medium">{{ repair.job_number }} · {{ repair.customer.name }}</div><div class="text-sm text-slate-500">{{ repair.device }} · {{ repair.issue_description }}</div><div class="text-sm text-slate-500">Current: {{ repair.status }}</div></div>
+        <form method="post" action="{{ url_for('technician.repair_status', id=repair.id) }}" class="flex gap-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><select name="status" class="px-3 py-2 border rounded">{% for status in statuses %}{% if status in ['Received','Diagnosing','Waiting Approval','Approved','Waiting Parts','In Repair','QC'] %}<option value="{{ status }}" {% if status == repair.status %}selected{% endif %}>{{ status }}</option>{% endif %}{% endfor %}</select><button class="px-3 py-2 bg-blue-600 text-white rounded">Update</button></form>
+      </div>
+      {% else %}<p class="text-slate-500">No repair jobs assigned.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
