@@ -1,91 +1,73 @@
 from faker import Faker
 import random
-from app.extensions import db
-from app.models import User, Customer, RepairOrder
+import secrets
 
+from app.extensions import db
+from app.models import Customer, RepairOrder, User
 
 
 fake = Faker()
+STATUSES = ["Pending", "In Progress", "Completed"]
+DEVICES = ["iPhone 11", "Samsung A51", "Laptop", "iPad", "MacBook"]
+ROLES = ["admin", "staff", "technician", "customer"]
+
+
+def _random_demo_password():
+    return secrets.token_urlsafe(18)
+
 
 def seed_users(n=5):
-    roles = ["admin", "staff", "technician", "customer"]
     for _ in range(n):
-        user = User(
-            email=fake.unique.email(),
-            role=random.choice(roles)
-        )
-        user.set_password("123456")
+        user = User(email=fake.unique.email(), role=random.choice(ROLES))
+        user.set_password(_random_demo_password())
         db.session.add(user)
     db.session.commit()
+
 
 def seed_customers(n=20):
     customers = []
     for _ in range(n):
-        customer = Customer(
-            name=fake.name(),
-            email=fake.unique.email(),
-            phone=fake.phone_number()
-        )
+        customer = Customer(name=fake.name(), email=fake.unique.email(), phone=fake.phone_number())
         db.session.add(customer)
         customers.append(customer)
     db.session.commit()
     return customers
 
+
 def seed_repairs(customers, n=50):
-    statuses = ["Received", "Diagnosing", "Waiting Parts", "In Repair", "Completed", "Delivered"]
-    devices = ["iPhone 11", "Samsung A51", "Laptop", "iPad", "MacBook"]
     for _ in range(n):
-        repair = RepairOrder(
+        db.session.add(RepairOrder(
             customer_id=random.choice(customers).id,
-            device=random.choice(devices),
+            device=random.choice(DEVICES),
             issue_description=fake.sentence(),
-            status=random.choice(statuses)
-        )
-        db.session.add(repair)
+            status=random.choice(STATUSES),
+        ))
     db.session.commit()
 
-
- 
 
 def seed_all():
     try:
         with db.session.begin():
-            # --- Users ---
-            roles = ["admin", "staff", "technician", "customer"]
             for _ in range(5):
-                u = User(email=fake.unique.email(), role=random.choice(roles))
-                u.set_password("123456")
-                db.session.add(u)
+                user = User(email=fake.unique.email(), role=random.choice(ROLES))
+                user.set_password(_random_demo_password())
+                db.session.add(user)
 
-            # --- Customers ---
             customers = []
             for _ in range(20):
-                c = Customer(
-                    name=fake.name(),
-                    email=fake.unique.email(),
-                    phone=fake.phone_number()
-                )
-                db.session.add(c)
-                customers.append(c)
+                customer = Customer(name=fake.name(), email=fake.unique.email(), phone=fake.phone_number())
+                db.session.add(customer)
+                customers.append(customer)
 
-            # Flush to get IDs without committing yet
-            db.session.flush()  # now c.id is available for RepairOrder
-
-            # --- Repairs ---
-            statuses = ["Received", "Diagnosing", "Waiting Parts", "In Repair", "Completed", "Delivered"]
-            devices = ["iPhone 11", "Samsung A51", "Laptop", "iPad", "MacBook"]
+            db.session.flush()
 
             for _ in range(50):
-                r = RepairOrder(
-                    customer_id=random.choice(customers).id,  # IDs now exist
-                    device=random.choice(devices),
+                db.session.add(RepairOrder(
+                    customer_id=random.choice(customers).id,
+                    device=random.choice(DEVICES),
                     issue_description=fake.sentence(),
-                    status=random.choice(statuses)
-                )
-                db.session.add(r)
-
-        print("Database seeded successfully!")
-
-    except Exception as e:
+                    status=random.choice(STATUSES),
+                ))
+    except Exception:
         db.session.rollback()
-        print("Seeding failed, rolled back!", e)
+        raise
