@@ -4,7 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.extensions import db
 from app.models import Part, StockMovement
-from app.security import login_required, role_required
+from app.security import permission_required
 
 inventory_bp = Blueprint("inventory", __name__, url_prefix="/inventory")
 
@@ -18,7 +18,7 @@ def _decimal(value):
 
 
 @inventory_bp.route("/")
-@login_required
+@permission_required("inventory")
 def list_parts():
     parts = Part.query.filter_by(active=True).order_by(Part.name.asc()).all()
     low_stock = [p for p in parts if p.quantity <= p.reorder_level]
@@ -26,7 +26,7 @@ def list_parts():
 
 
 @inventory_bp.route("/add", methods=["GET", "POST"])
-@role_required("admin", "staff")
+@permission_required("inventory")
 def add_part():
     if request.method == "POST":
         sku = request.form.get("sku", "").strip()
@@ -60,7 +60,7 @@ def add_part():
 
 
 @inventory_bp.route("/stock/<int:part_id>", methods=["POST"])
-@role_required("admin", "staff")
+@permission_required("inventory")
 def adjust_stock(part_id):
     part = Part.query.get_or_404(part_id)
     quantity = _decimal(request.form.get("quantity"))
