@@ -32,11 +32,39 @@
         <p class="text-sm text-slate-500 mt-1">Edit the messages customers receive. Changes affect future SMS only.</p>
         <div class="mt-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 p-4 text-sm">
           <p class="font-medium mb-2">Variables you can use</p>
-          <div class="space-y-1 text-slate-600 dark:text-slate-300">
-            <p><code>{job_number}</code> → repair/job number e.g. <strong>JOB-20260826-0012</strong></p>
-            <p><code>{device}</code> → device being repaired e.g. <strong>iPhone 15 Pro</strong></p>
-            <p><code>{amount}</code> → payment amount for payment SMS e.g. <strong>1000.00</strong></p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-700">
+                  <th class="py-2 pr-4">Variable</th>
+                  <th class="py-2 pr-4">Meaning</th>
+                  <th class="py-2 pr-4">Example</th>
+                  <th class="py-2">Available in</th>
+                </tr>
+              </thead>
+              <tbody class="text-slate-600 dark:text-slate-300">
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2 pr-4 font-mono">{job_number}</td>
+                  <td class="py-2 pr-4">Unique repair/job number</td>
+                  <td class="py-2 pr-4 font-mono">JOB-20260826-0012</td>
+                  <td class="py-2">All SMS events</td>
+                </tr>
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2 pr-4 font-mono">{device}</td>
+                  <td class="py-2 pr-4">Device being repaired</td>
+                  <td class="py-2 pr-4">iPhone 15 Pro</td>
+                  <td class="py-2">All SMS events</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-4 font-mono">{amount}</td>
+                  <td class="py-2 pr-4">Payment amount received</td>
+                  <td class="py-2 pr-4">1000.00</td>
+                  <td class="py-2">Payment Received only</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+          <p class="text-xs text-slate-500 mt-3">These are the only variables currently passed by RSMS. Using another variable can cause the notification to fail.</p>
         </div>
       </div>
       <div class="space-y-4">
