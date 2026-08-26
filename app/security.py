@@ -6,6 +6,7 @@ from flask import abort, current_app, g, redirect, render_template, request, ses
 
 from app.extensions import db
 from app.models import User
+from app.roles import role_allowed
 
 
 CSRF_SESSION_KEY = "_csrf_token"
@@ -53,7 +54,7 @@ def role_required(*roles):
         def wrapped(*args, **kwargs):
             if g.current_user is None:
                 return redirect(url_for("auth.login", next=request.full_path))
-            if g.current_user.role not in allowed:
+            if not role_allowed(g.current_user.role, allowed):
                 abort(403)
             return view(*args, **kwargs)
         return wrapped
