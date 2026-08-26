@@ -39,8 +39,6 @@ def upgrade():
         if name not in existing_columns:
             op.add_column("repair_qc", column)
 
-    # SQLite cannot ALTER TABLE to add/drop foreign keys directly. Rebuild the
-    # table in batch mode so the migration works on both SQLite and other DBs.
     inspector = inspect(bind)
     existing_fks = {
         fk.get("name")
