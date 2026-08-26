@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
-  <div><h1 class="text-2xl font-bold">New Lead</h1></div>
+  <div><h1 class="text-2xl font-bold">New Lead</h1><p class="text-sm text-slate-500 mt-1">New leads start as New. Record contact attempts from the lead detail page.</p></div>
   <form method="post" class="bg-white dark:bg-slate-900 p-6 rounded-xl border space-y-5">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="status" value="New">
     <div class="grid md:grid-cols-2 gap-4">
       {% for name,label in [('name','Name'),('phone','Phone'),('email','Email'),('device','Device'),('issue','Issue'),('source','Source'),('area','Area') ] %}
       <label class="block"><span class="text-sm font-medium">{{ label }}</span><input name="{{ name }}" {% if name in ['name','phone'] %}required{% endif %} class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
       {% endfor %}
       <label class="block"><span class="text-sm font-medium">Service type</span><select name="service_type" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"><option>Doorstep</option><option>In-Shop</option><option>Pickup/Drop</option></select></label>
-      <label class="block"><span class="text-sm font-medium">Status</span><select name="status" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800">{% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select></label>
       <label class="block"><span class="text-sm font-medium">Assign to</span><select name="assigned_to_id" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"><option value="">Unassigned</option>{% for u in staff %}<option value="{{ u.id }}">{{ u.email }}</option>{% endfor %}</select></label>
     </div>
     <label class="block"><span class="text-sm font-medium">Notes</span><textarea name="notes" rows="4" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></textarea></label>
