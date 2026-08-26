@@ -229,6 +229,14 @@ def update_repair_status(id):
     if new_status != repair.status and new_status not in REPAIR_TRANSITIONS.get(repair.status, set()):
         flash(f"Invalid status transition: {repair.status} → {new_status}", "error")
         return redirect(url_for("repair.view_repair", id=id))
+
+    qc = RepairQC.query.filter_by(repair_id=repair.id).first()
+    if new_status == "In Repair" and (qc is None or qc.before_status not in {"Passed", "Waived"}):
+        flash("QC Before Repair must be passed or waived before repair work can start", "error")
+        return redirect(url_for("repair.view_repair", id=id))
+    if new_status == "Ready" and (qc is None or qc.after_status not in {"Passed", "Waived"}):
+        flash("QC After Repair must be passed or waived before the repair can be marked Ready", "error")
+        return redirect(url_for("repair.view_repair", id=id))
     if new_status == "Delivered":
         allowed, reason = _delivery_allowed(repair)
         if not allowed:
