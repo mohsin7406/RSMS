@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
@@ -12,7 +12,7 @@ leads_bp = Blueprint("leads", __name__, url_prefix="/leads")
 
 
 def _booking_number():
-    today = datetime.now().strftime("%Y%m%d")
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
     latest = Booking.query.filter(Booking.booking_number.like(f"BOOK-{today}-%")).order_by(Booking.id.desc()).first()
     seq = int(latest.booking_number.rsplit("-", 1)[-1]) + 1 if latest else 1
     return f"BOOK-{today}-{seq:04d}"
@@ -119,15 +119,15 @@ def confirm_lead(id):
     booking = Booking(
         booking_number=_booking_number(), customer_id=customer.id, service_type=lead.service_type,
         scheduled_at=scheduled_at, area=lead.area,
-        notes=" | ".join(filter(None, [lead.device, lead.issue, lead.notes])), status="Confirmed",
+        notes=" | ".join(filter(None, [lead.device, lead.issue, lead.notes])), status="Scheduled",
     )
     db.session.add(booking)
     db.session.flush()
     lead.booking_id = booking.id
     lead.status = "Booked"
-    db.session.add(LeadContact(lead_id=lead.id, user_id=current_user_id(), method="Other", outcome="Confirmed", notes=f"Confirmed as booking {booking.booking_number}"))
+    db.session.add(LeadContact(lead_id=lead.id, user_id=current_user_id(), method="Other", outcome="Confirmed", notes=f"Moved to scheduled booking {booking.booking_number}"))
     db.session.commit()
-    flash(f"Lead confirmed and moved to booking {booking.booking_number}", "success")
+    flash(f"Lead moved to scheduled booking {booking.booking_number}. Confirm the booking to create the repair job.", "success")
     return redirect(url_for("bookings.list_bookings"))
 
 
