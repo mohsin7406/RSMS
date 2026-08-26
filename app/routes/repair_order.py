@@ -149,7 +149,10 @@ def add_repair():
 @repair_bp.route("/edit/<int:id>", methods=["GET", "POST"])
 @role_required("admin", "staff")
 def edit_repair(id):
-    repair = RepairOrder.query.get_or_404(id)
+    repair = db.session.get(RepairOrder, id)
+    if repair is None:
+        from flask import abort
+        abort(404)
     customers = Customer.query.order_by(Customer.name.asc()).all()
     technicians = User.query.filter_by(role="technician").order_by(User.email.asc()).all()
     if request.method == "POST":
