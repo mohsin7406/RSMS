@@ -34,7 +34,8 @@ ROLE_PERMISSIONS = {
         "repairs_view", "repairs_manage", "customers", "inventory", "leads",
         "bookings", "billing", "reports",
     },
-    "technician": {"repairs_view", "qc"},
+    # Existing route-level checks still restrict technicians to their assigned jobs.
+    "technician": {"repairs_view", "repairs_manage", "qc"},
     "accounts": {"repairs_view", "customers", "billing", "reports"},
     "reception": {"repairs_view", "customers", "leads", "bookings"},
     "customer": set(),
