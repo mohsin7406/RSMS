@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
@@ -20,7 +20,7 @@ def _money(value):
 
 
 def _number(prefix, model, field):
-    today = datetime.utcnow().strftime("%Y%m%d")
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
     latest = model.query.filter(getattr(model, field).like(f"{prefix}-{today}-%")).order_by(model.id.desc()).first()
     sequence = int(getattr(latest, field).rsplit("-", 1)[-1]) + 1 if latest else 1
     return f"{prefix}-{today}-{sequence:04d}"
@@ -56,8 +56,8 @@ def create_invoice(repair_id):
         tax=tax,
         total=total,
         status="Issued",
-        issued_at=datetime.utcnow(),
-        due_at=datetime.utcnow(),
+        issued_at=datetime.now(timezone.utc),
+        due_at=datetime.now(timezone.utc),
     )
     repair.final_amount = total
     db.session.add(invoice)
