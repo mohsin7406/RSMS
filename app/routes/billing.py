@@ -35,9 +35,34 @@ def _totals(invoice):
     return paid, refunded, net_paid, balance
 
 
+def _sync_doorstep_final_amount(repair):
+    """Keep Doorstep final amount equal to base estimate plus all audited extras.
+
+    This also repairs older jobs whose final_amount was incorrectly replaced by an
+    extra charge instead of increased by it.
+    """
+    extras_total = sum(
+        (charge.amount for charge in RepairExtraCharge.query.filter_by(repair_id=repair.id).all()),
+        Decimal("0"),
+    )
+    estimate = _money(repair.estimated_amount)
+
+    if estimate > 0:
+        repair.final_amount = estimate + extras_total
+    else:
+        # Older/manual jobs may have no estimate. Preserve their existing base
+        # amount while still ensuring recorded extras are represented.
+        current_final = _money(repair.final_amount)
+        repair.final_amount = max(current_final, extras_total)
+
+    return _money(repair.final_amount)
+
+
 def _create_invoice_for_repair(repair, discount=Decimal("0"), tax=Decimal("0")):
     if repair.invoice:
         return repair.invoice
+    if repair.service_type == "Doorstep":
+        _sync_doorstep_final_amount(repair)
     subtotal = _money(repair.final_amount)
     discount = min(_money(discount), subtotal)
     tax = _money(tax)
@@ -108,13 +133,9 @@ def add_extra_charge(repair_id):
         added_by_id=g.current_user.id,
     )
     db.session.add(charge)
+    db.session.flush()
 
-    # A Doorstep booking may arrive with an estimate but no explicit final amount.
-    # Extra charges must increase the job price; they must never replace the estimate.
-    current_final = _money(repair.final_amount)
-    estimate = _money(repair.estimated_amount)
-    base_amount = max(current_final, estimate)
-    repair.final_amount = base_amount + amount
+    _sync_doorstep_final_amount(repair)
 
     db.session.commit()
     flash(f"Extra charge ₹{amount:.2f} added. New final amount: ₹{repair.final_amount:.2f}", "success")
@@ -140,13 +161,16 @@ def collect_doorstep_payment(repair_id):
         flash("Enter a valid payment amount and method", "error")
         return redirect(url_for("repair.view_repair", id=repair.id))
 
-    final_amount = _money(repair.final_amount)
+    # Recalculate from the estimate + audited extras every time. This heals old
+    # technician jobs where final_amount was incorrectly overwritten by an extra.
+    final_amount = _sync_doorstep_final_amount(repair)
     amount_paid = _money(repair.amount_paid)
     outstanding = max(final_amount - amount_paid, Decimal("0"))
     if final_amount <= 0:
         flash("Final repair amount has not been set. Add the job amount or an extra charge before collecting payment.", "error")
         return redirect(url_for("repair.view_repair", id=repair.id))
     if amount > outstanding:
+        db.session.commit()
         flash(
             f"Payment cannot exceed ₹{outstanding:.2f}. Final Amount: ₹{final_amount:.2f}; Already Paid: ₹{amount_paid:.2f}; Outstanding: ₹{outstanding:.2f}",
             "error",
