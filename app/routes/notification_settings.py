@@ -18,6 +18,12 @@ TEMPLATE_EVENTS = (
     ("delivered", "Delivered"),
 )
 
+WHATSAPP_WEB_EVENT = "repair_message"
+WHATSAPP_WEB_DEFAULT = (
+    "Hi {customer_name}, your FixZone repair {job_number} for {device} "
+    "is currently {status}."
+)
+
 
 @notifications_bp.route("/", methods=["GET", "POST"])
 @role_required("admin")
@@ -28,6 +34,9 @@ def settings():
         event: NotificationTemplate.query.filter_by(channel="sms", event=event).first()
         for event, _label in TEMPLATE_EVENTS
     }
+    whatsapp_web_template = NotificationTemplate.query.filter_by(
+        channel="whatsapp_web", event=WHATSAPP_WEB_EVENT
+    ).first()
 
     if request.method == "POST":
         for channel in ("sms", "whatsapp"):
@@ -54,6 +63,18 @@ def settings():
             if body:
                 template.body = body
 
+        if whatsapp_web_template is None:
+            whatsapp_web_template = NotificationTemplate(
+                channel="whatsapp_web",
+                event=WHATSAPP_WEB_EVENT,
+                enabled=True,
+                body=WHATSAPP_WEB_DEFAULT,
+            )
+            db.session.add(whatsapp_web_template)
+        whatsapp_web_template.enabled = request.form.get("whatsapp_web_template_enabled") == "on"
+        whatsapp_body = request.form.get("whatsapp_web_template_body", "").strip()
+        whatsapp_web_template.body = whatsapp_body or WHATSAPP_WEB_DEFAULT
+
         db.session.commit()
         flash("Notification settings saved", "success")
         return redirect(url_for("notifications.settings"))
@@ -64,6 +85,8 @@ def settings():
         whatsapp=whatsapp,
         templates=templates,
         template_events=TEMPLATE_EVENTS,
+        whatsapp_web_template=whatsapp_web_template,
+        whatsapp_web_default=WHATSAPP_WEB_DEFAULT,
     )
 
 
