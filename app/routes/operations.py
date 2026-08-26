@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from sqlalchemy import func
 from app.extensions import db
 from app.models import AuditEvent, Customer, Expense, Part, PartUsage, Purchase, PurchaseReturn, RepairOrder, StockAllocation, StockMovement, Supplier, SupplierPayment, User
@@ -14,7 +14,6 @@ def D(value):
 def audit(action,entity_type,entity_id,details=""):db.session.add(AuditEvent(user_id=current_user_id(),action=action,entity_type=entity_type,entity_id=entity_id,details=details))
 def supplier_totals(supplier):
     purchases=sum((p.total for p in Purchase.query.filter_by(supplier_id=supplier.id).all() if getattr(p,"status","Active")!="Voided"),Decimal("0"));returns=sum((r.total for r in PurchaseReturn.query.join(Purchase).filter(Purchase.supplier_id==supplier.id).all() if getattr(r.purchase,"status","Active")!="Voided"),Decimal("0"));paid=sum((p.amount for p in supplier.payments),Decimal("0"));return purchases,returns,paid,max(purchases-returns-paid,Decimal("0"))
-
 @ops_bp.route("/suppliers")
 @permission_required("purchases")
 def suppliers():return render_template("operations/suppliers.html",rows=[(s,*supplier_totals(s)) for s in Supplier.query.order_by(Supplier.name).all()])
@@ -28,7 +27,6 @@ def supplier_payment(supplier_id):
     if outstanding<=0:flash("This supplier has no outstanding balance.","error");return redirect(url_for("ops.suppliers"))
     if amount>outstanding:flash(f"Payment cannot exceed supplier outstanding ₹{outstanding:.2f}.","error");return redirect(url_for("ops.suppliers"))
     p=SupplierPayment(supplier_id=supplier.id,amount=amount,payment_date=date.fromisoformat(request.form.get("payment_date") or date.today().isoformat()),method=method,reference=request.form.get("reference"),notes=request.form.get("notes"),created_by=current_user_id());db.session.add(p);audit("supplier_payment","supplier",supplier.id,f"Paid {amount}; previous outstanding {outstanding}");db.session.commit();flash("Supplier payment recorded.","success");return redirect(url_for("ops.suppliers"))
-
 @ops_bp.route("/expenses",methods=["GET","POST"])
 @permission_required("expenses")
 def expenses():
@@ -38,15 +36,20 @@ def expenses():
         if category not in get_options("expense_categories"):flash("Select a valid configured expense category.","error");return redirect(url_for("ops.expenses"))
         if method and method not in get_options("payment_methods"):flash("Select a valid configured payment method.","error");return redirect(url_for("ops.expenses"))
         if repair_id and db.session.get(RepairOrder,repair_id) is None:abort(400)
-        expense=Expense(expense_date=date.fromisoformat(request.form.get("expense_date") or date.today().isoformat()),category=category,amount=amount,repair_id=repair_id,description=request.form.get("description") or "Expense",payment_method=method or None,reference=request.form.get("reference"),created_by=current_user_id());db.session.add(expense);db.session.flush();audit("expense_created","expense",expense.id,f"{category} {amount}; repair={repair_id or '-'}");db.session.commit();flash("Expense saved.","success");return redirect(url_for("ops.expenses"))
+        needs_approval=get_bool("expense_approval_required");auto_approve=not needs_approval or (g.current_user and g.current_user.role in {"admin","manager"});expense=Expense(expense_date=date.fromisoformat(request.form.get("expense_date") or date.today().isoformat()),category=category,amount=amount,repair_id=repair_id,description=request.form.get("description") or "Expense",payment_method=method or None,reference=request.form.get("reference"),status="Approved" if auto_approve else "Pending",approved_by=current_user_id() if auto_approve else None,approved_at=datetime.now(timezone.utc) if auto_approve else None,created_by=current_user_id());db.session.add(expense);db.session.flush();audit("expense_created","expense",expense.id,f"{category} {amount}; status={expense.status}; repair={repair_id or '-'}");db.session.commit();flash("Expense saved." if auto_approve else "Expense saved and is awaiting approval.","success");return redirect(url_for("ops.expenses"))
     return render_template("operations/expenses.html",rows=Expense.query.order_by(Expense.expense_date.desc(),Expense.id.desc()).all(),repairs=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None)).order_by(RepairOrder.id.desc()).limit(200).all(),today=date.today().isoformat())
-
+@ops_bp.route("/expenses/<int:expense_id>/approve",methods=["POST"])
+@permission_required("expenses")
+def approve_expense(expense_id):
+    if not g.current_user or g.current_user.role not in {"admin","manager"}:return ("Forbidden",403)
+    expense=db.session.get(Expense,expense_id)
+    if expense is None:abort(404)
+    expense.status="Approved";expense.approved_by=current_user_id();expense.approved_at=datetime.now(timezone.utc);audit("expense_approved","expense",expense.id,f"Approved ₹{expense.amount}");db.session.commit();flash("Expense approved.","success");return redirect(url_for("ops.expenses"))
 @ops_bp.route("/stock",methods=["GET","POST"])
 @permission_required("inventory")
 def stock():
     if request.method=="POST":
-        part=db.session.get(Part,request.form.get("part_id",type=int));repair=db.session.get(RepairOrder,request.form.get("repair_id",type=int));qty=D(request.form.get("quantity"));reserved=D(db.session.query(func.coalesce(func.sum(StockAllocation.quantity),0)).filter(StockAllocation.part_id==part.id,StockAllocation.status.in_(["Reserved","With Technician"])).scalar()) if part else Decimal("0")
-        available=D(part.quantity)-reserved if part else Decimal("0")
+        part=db.session.get(Part,request.form.get("part_id",type=int));repair=db.session.get(RepairOrder,request.form.get("repair_id",type=int));qty=D(request.form.get("quantity"));reserved=D(db.session.query(func.coalesce(func.sum(StockAllocation.quantity),0)).filter(StockAllocation.part_id==part.id,StockAllocation.status.in_(["Reserved","With Technician"])).scalar()) if part else Decimal("0");available=D(part.quantity)-reserved if part else Decimal("0")
         if not part or not repair or repair.deleted_at is not None or qty<=0 or (available<qty and not get_bool("allow_negative_stock")):flash("Not enough available unreserved stock.","error");return redirect(url_for("ops.stock"))
         technician_id=request.form.get("technician_id",type=int) or repair.assigned_technician_id
         if technician_id and not User.query.filter_by(id=technician_id,role="technician").first():flash("Selected technician is invalid.","error");return redirect(url_for("ops.stock"))
@@ -64,7 +67,6 @@ def stock_status(allocation_id,status):
         if D(allocation.part.quantity)<D(allocation.quantity) and not get_bool("allow_negative_stock"):flash("Physical stock is insufficient.","error");return redirect(url_for("ops.stock"))
         allocation.part.quantity-=allocation.quantity;db.session.add(PartUsage(repair_id=allocation.repair_id,part_id=allocation.part_id,quantity=allocation.quantity,unit_cost=allocation.part.cost_price,unit_price=allocation.part.selling_price));db.session.add(StockMovement(part_id=allocation.part_id,user_id=current_user_id(),movement_type="OUT",quantity=allocation.quantity,reference=allocation.repair.job_number,notes="Reserved/technician stock used on repair"))
     old=allocation.status;allocation.status=status;audit("stock_allocation_status","stock_allocation",allocation.id,f"{old} → {status}");db.session.commit();flash(f"Stock allocation marked {status}.","success");return redirect(url_for("ops.stock"))
-
 @ops_bp.route("/customers/<int:customer_id>/history")
 @permission_required("customers")
 def customer_history(customer_id):
@@ -77,4 +79,4 @@ def audit_log():return render_template("operations/audit.html",rows=AuditEvent.q
 @ops_bp.route("/executive-report")
 @permission_required("reports")
 def executive_report():
-    collections=D(db.session.query(func.coalesce(func.sum(RepairOrder.amount_paid),0)).scalar());operating_expenses=D(db.session.query(func.coalesce(func.sum(Expense.amount),0)).scalar());supplier_paid=D(db.session.query(func.coalesce(func.sum(SupplierPayment.amount),0)).scalar());repairs=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None)).all();material_cost=sum((usage.net_cost_total for repair in repairs for usage in repair.parts_used),Decimal("0"))+sum((purchase.net_cost_total for repair in repairs for purchase in repair.job_purchases),Decimal("0"));supplier_outstanding=sum((supplier_totals(s)[3] for s in Supplier.query.all()),Decimal("0"));open_jobs=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None),~RepairOrder.status.in_(["Delivered","Completed","Cancelled"])).count();unpaid=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None),RepairOrder.payment_status!="Paid",~RepairOrder.status.in_(["Cancelled"])).count();low=Part.query.filter(Part.active.is_(True),Part.quantity<=Part.reorder_level).count();return render_template("operations/report.html",revenue=collections,expenses=operating_expenses,supplier_paid=supplier_paid,material_cost=material_cost,supplier_outstanding=supplier_outstanding,net=collections-material_cost-operating_expenses,open_jobs=open_jobs,unpaid=unpaid,low=low)
+    collections=D(db.session.query(func.coalesce(func.sum(RepairOrder.amount_paid),0)).scalar());operating_expenses=D(db.session.query(func.coalesce(func.sum(Expense.amount),0)).filter(Expense.status=="Approved").scalar());supplier_paid=D(db.session.query(func.coalesce(func.sum(SupplierPayment.amount),0)).scalar());repairs=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None)).all();material_cost=sum((usage.net_cost_total for repair in repairs for usage in repair.parts_used),Decimal("0"))+sum((purchase.net_cost_total for repair in repairs for purchase in repair.job_purchases),Decimal("0"));supplier_outstanding=sum((supplier_totals(s)[3] for s in Supplier.query.all()),Decimal("0"));open_jobs=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None),~RepairOrder.status.in_(["Delivered","Completed","Cancelled"])).count();unpaid=RepairOrder.query.filter(RepairOrder.deleted_at.is_(None),RepairOrder.payment_status!="Paid",~RepairOrder.status.in_(["Cancelled"])).count();low=Part.query.filter(Part.active.is_(True),Part.quantity<=Part.reorder_level).count();return render_template("operations/report.html",revenue=collections,expenses=operating_expenses,supplier_paid=supplier_paid,material_cost=material_cost,supplier_outstanding=supplier_outstanding,net=collections-material_cost-operating_expenses,open_jobs=open_jobs,unpaid=unpaid,low=low)
