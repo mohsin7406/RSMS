@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold">SMS / WhatsApp Settings</h2>
+    <p class="text-sm text-slate-500 mt-1">Configure notification providers. Credentials are only editable by administrators.</p>
+  </div>
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for channel, label, setting in [('sms','SMS',sms),('whatsapp','WhatsApp',whatsapp)] %}
+    <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-lg">{{ label }}</h3>
+        <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="{{ channel }}_enabled" {% if setting and setting.enabled %}checked{% endif %}> Enabled</label>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <label class="text-sm">Provider<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_provider" value="{{ setting.provider if setting else '' }}" placeholder="e.g. Twilio / MSG91 / Meta"></label>
+        <label class="text-sm">API URL<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_api_url" value="{{ setting.api_url if setting else '' }}"></label>
+        <label class="text-sm">API Key<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" type="password" name="{{ channel }}_api_key" placeholder="Leave blank to keep existing"></label>
+        <label class="text-sm">Sender ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_sender_id" value="{{ setting.sender_id if setting else '' }}"></label>
+        <label class="text-sm">Account ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_account_id" value="{{ setting.account_id if setting else '' }}"></label>
+        <label class="text-sm">Phone Number ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_phone_number_id" value="{{ setting.phone_number_id if setting else '' }}"></label>
+        <label class="text-sm md:col-span-2">Access Token<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" type="password" name="{{ channel }}_access_token" placeholder="Leave blank to keep existing"></label>
+      </div>
+    </section>
+    {% endfor %}
+    <button class="px-5 py-2.5 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">Save Settings</button>
+  </form>
+</div>
+{% endblock %}
