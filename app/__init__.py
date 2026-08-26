@@ -30,6 +30,7 @@ def create_app(config_name=None):
     from app.routes.auth import auth_bp
     from app.routes.customer import customer_bp
     from app.routes.repair_order import repair_bp
+    from app.routes import repair_permissions  # noqa: F401
     from app.routes.inventory import inventory_bp
     from app.routes.billing import billing_bp
     from app.routes.qc import qc_bp
