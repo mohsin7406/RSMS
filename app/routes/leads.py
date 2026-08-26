@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from app.extensions import db
 from app.models import Booking, Customer, Lead, LeadContact, User
@@ -16,6 +16,13 @@ def _booking_number():
     latest = Booking.query.filter(Booking.booking_number.like(f"BOOK-{today}-%")).order_by(Booking.id.desc()).first()
     seq = int(latest.booking_number.rsplit("-", 1)[-1]) + 1 if latest else 1
     return f"BOOK-{today}-{seq:04d}"
+
+
+def _get_lead_or_404(lead_id):
+    lead = db.session.get(Lead, lead_id)
+    if lead is None:
+        abort(404)
+    return lead
 
 
 def _find_or_create_customer(lead):
@@ -43,7 +50,7 @@ def list_leads():
 @leads_bp.route("/<int:id>")
 @permission_required("leads")
 def lead_detail(id):
-    lead = Lead.query.get_or_404(id)
+    lead = _get_lead_or_404(id)
     return render_template("leads/detail.html", lead=lead, methods=CONTACT_METHODS, outcomes=CONTACT_OUTCOMES)
 
 
@@ -76,7 +83,7 @@ def add_lead():
 @leads_bp.route("/<int:id>/contact", methods=["POST"])
 @permission_required("leads")
 def add_contact(id):
-    lead = Lead.query.get_or_404(id)
+    lead = _get_lead_or_404(id)
     method = request.form.get("method", "Call")
     outcome = request.form.get("outcome", "Follow Up")
     notes = request.form.get("notes", "").strip() or None
@@ -98,7 +105,7 @@ def add_contact(id):
 @leads_bp.route("/<int:id>/confirm", methods=["POST"])
 @permission_required("leads")
 def confirm_lead(id):
-    lead = Lead.query.get_or_404(id)
+    lead = _get_lead_or_404(id)
     if lead.booking_id:
         flash("This lead already has a booking", "success")
         return redirect(url_for("bookings.list_bookings"))
@@ -127,7 +134,7 @@ def confirm_lead(id):
 @leads_bp.route("/<int:id>/status", methods=["POST"])
 @permission_required("leads")
 def update_status(id):
-    lead = Lead.query.get_or_404(id)
+    lead = _get_lead_or_404(id)
     status = request.form.get("status", "")
     if status not in LEAD_STATUSES:
         flash("Invalid lead status", "error")
@@ -144,7 +151,7 @@ def update_status(id):
 @leads_bp.route("/<int:id>/assign", methods=["POST"])
 @permission_required("leads")
 def assign_lead(id):
-    lead = Lead.query.get_or_404(id)
+    lead = _get_lead_or_404(id)
     lead.assigned_to_id = request.form.get("assigned_to_id", type=int)
     db.session.commit()
     flash("Lead assigned", "success")
