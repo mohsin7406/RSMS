@@ -7,7 +7,14 @@
       <h1 class="text-3xl font-bold mt-2">{{ lead.name }}</h1>
       <p class="text-slate-500">{{ lead.phone }} · {{ lead.device or 'Device not specified' }}</p>
     </div>
-    <span class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-medium">{{ lead.status }}</span>
+    <div class="flex items-center gap-2 flex-wrap justify-end">
+      <span class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-medium">{{ lead.status }}</span>
+      <a href="{{ url_for('leads.edit_lead', id=lead.id) }}" class="px-3 py-2 rounded-lg border">Edit Lead</a>
+      <form method="post" action="{{ url_for('leads.delete_lead', id=lead.id) }}" onsubmit="return confirm('Delete this lead? This cannot be undone.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="px-3 py-2 rounded-lg border border-red-300 text-red-600">Delete</button>
+      </form>
+    </div>
   </div>
 
   <div class="grid md:grid-cols-3 gap-6">
