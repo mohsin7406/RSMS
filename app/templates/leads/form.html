@@ -3,13 +3,11 @@
 <div class="max-w-3xl mx-auto space-y-6">
   <div><h1 class="text-2xl font-bold">{{ action or 'New' }} Lead</h1><p class="text-sm text-slate-500 mt-1">{{ 'Update the lead details below.' if action == 'Edit' else 'New leads start as New. Record contact attempts from the lead detail page.' }}</p></div>
   <form method="post" class="bg-white dark:bg-slate-900 p-6 rounded-xl border space-y-5">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% if action != 'Edit' %}<input type="hidden" name="status" value="New">{% endif %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if action != 'Edit' %}<input type="hidden" name="status" value="New">{% endif %}
     <div class="grid md:grid-cols-2 gap-4">
-      {% for name,label in [('name','Name'),('phone','Phone'),('email','Email'),('device','Device'),('issue','Issue'),('source','Source'),('area','Area') ] %}
-      <label class="block"><span class="text-sm font-medium">{{ label }}</span><input name="{{ name }}" value="{{ (lead|attr(name)) if lead and (lead|attr(name)) else '' }}" {% if name in ['name','phone'] %}required{% endif %} class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
-      {% endfor %}
-      <label class="block"><span class="text-sm font-medium">Service type</span><select name="service_type" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800">{% for s in ['Doorstep','In-Shop','Pickup/Drop'] %}<option {% if lead and lead.service_type == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+      {% for name,label in [('name','Name'),('phone','Phone'),('email','Email'),('device','Device'),('issue','Issue'),('area','Area')] %}<label class="block"><span class="text-sm font-medium">{{ label }}</span><input name="{{ name }}" value="{{ (lead|attr(name)) if lead and (lead|attr(name)) else '' }}" {% if name in ['name','phone'] %}required{% endif %} class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>{% endfor %}
+      <label class="block"><span class="text-sm font-medium">Source</span><select name="source" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"><option value="">Select source</option>{% for s in setting_options('lead_sources') %}<option value="{{ s }}" {% if lead and lead.source==s %}selected{% endif %}>{{ s }}</option>{% endfor %}{% if lead and lead.source and lead.source not in setting_options('lead_sources') %}<option value="{{ lead.source }}" selected>{{ lead.source }} (existing)</option>{% endif %}</select></label>
+      <label class="block"><span class="text-sm font-medium">Service type</span><select name="service_type" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800">{% for s in setting_options('service_types') %}<option value="{{ s }}" {% if (lead and lead.service_type==s) or (not lead and s=='Doorstep') %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
       <label class="block"><span class="text-sm font-medium">Assign to</span><select name="assigned_to_id" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"><option value="">Unassigned</option>{% for u in staff %}<option value="{{ u.id }}" {% if lead and lead.assigned_to_id == u.id %}selected{% endif %}>{{ u.email }}</option>{% endfor %}</select></label>
     </div>
     <label class="block"><span class="text-sm font-medium">Notes</span><textarea name="notes" rows="4" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800">{{ lead.notes if lead and lead.notes else '' }}</textarea></label>
