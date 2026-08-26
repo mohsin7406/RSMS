@@ -19,10 +19,11 @@ from app.models.sms_log import SMSLog
 from app.models.role_permission import RolePermission
 from app.models.repair_extra_charge import RepairExtraCharge
 from app.models.job_purchase import JobPurchase
+from app.models.job_purchase_return import JobPurchaseReturn
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage",
     "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "LeadContact", "Booking",
     "ServiceConfirmation", "RepairPhoto", "NotificationTemplate", "SMSLog", "RolePermission", "RepairExtraCharge",
-    "JobPurchase",
+    "JobPurchase", "JobPurchaseReturn",
 ]
