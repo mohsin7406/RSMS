@@ -12,7 +12,7 @@
 
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
     <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Inventory Cost</div><div class="text-xl font-bold">₹{{ '%.2f'|format(inventory_cost) }}</div></div>
-    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Purchased Cost</div><div class="text-xl font-bold">₹{{ '%.2f'|format(purchase_cost) }}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Net Purchased Cost</div><div class="text-xl font-bold">₹{{ '%.2f'|format(purchase_cost) }}</div></div>
     <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Material Cost Total</div><div class="text-xl font-bold">₹{{ '%.2f'|format(inventory_cost + purchase_cost) }}</div></div>
     <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Customer Charge Reference</div><div class="text-xl font-bold">₹{{ '%.2f'|format(inventory_sale + purchase_sale) }}</div></div>
   </div>
@@ -21,15 +21,13 @@
     <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
       <h2 class="text-lg font-bold">Use Inventory Stock</h2>
       <p class="text-sm text-slate-500 mt-1 mb-4">Use this when the item is already in FixZone stock. Stock is reduced automatically.</p>
-      {% if parts %}
+      {% if available_parts %}
       <form method="post" action="{{ url_for('materials.add_inventory_part', repair_id=repair.id) }}" class="space-y-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="block text-sm">Part
           <select name="part_id" required class="mt-1 w-full rounded border p-2 dark:bg-slate-800">
             <option value="">Select inventory item</option>
-            {% for part in parts %}
-              <option value="{{ part.id }}">{{ part.name }}{% if part.model %} · {{ part.model }}{% endif %} — Stock {{ part.quantity }} — Cost ₹{{ '%.2f'|format(part.cost_price) }}</option>
-            {% endfor %}
+            {% for part in available_parts %}<option value="{{ part.id }}">{{ part.name }}{% if part.model %} · {{ part.model }}{% endif %} — Stock {{ part.quantity }} — Cost ₹{{ '%.2f'|format(part.cost_price) }}</option>{% endfor %}
           </select>
         </label>
         <div class="grid grid-cols-2 gap-3">
@@ -43,7 +41,7 @@
 
     <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
       <h2 class="text-lg font-bold">Purchased for This Job</h2>
-      <p class="text-sm text-slate-500 mt-1 mb-4">Use this when you buy a part specifically before visiting the customer. It does not change inventory stock.</p>
+      <p class="text-sm text-slate-500 mt-1 mb-4">Record parts bought specifically before visiting the customer. They do not change inventory until an Admin/Manager returns them to stock.</p>
       <form method="post" action="{{ url_for('materials.add_job_purchase', repair_id=repair.id) }}" class="space-y-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="block text-sm">Item / Part Name<input name="item_name" required class="mt-1 w-full rounded border p-2 bg-transparent" placeholder="e.g. iPhone 15 OLED Display"></label>
@@ -66,28 +64,43 @@
       <h2 class="text-lg font-bold mb-4">Inventory Parts Used</h2>
       <div class="space-y-3">
         {% for usage in repair.parts_used %}
-        <div class="border-b last:border-0 pb-3">
-          <div class="flex justify-between gap-3"><strong>{{ usage.part.name }}</strong><span>Qty {{ usage.quantity }}</span></div>
-          <div class="text-sm text-slate-500">Cost ₹{{ '%.2f'|format(usage.cost_total) }} · Customer charge ₹{{ '%.2f'|format(usage.sale_total) }}</div>
-        </div>
+        <div class="border-b last:border-0 pb-3"><div class="flex justify-between gap-3"><strong>{{ usage.part.name }}</strong><span>Qty {{ usage.quantity }}</span></div><div class="text-sm text-slate-500">Cost ₹{{ '%.2f'|format(usage.cost_total) }} · Customer charge ₹{{ '%.2f'|format(usage.sale_total) }}</div></div>
         {% else %}<p class="text-sm text-slate-500">No inventory parts used yet.</p>{% endfor %}
       </div>
     </section>
 
     <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
       <h2 class="text-lg font-bold mb-4">Purchased for Job</h2>
-      <div class="space-y-3">
+      <div class="space-y-4">
         {% for purchase in repair.job_purchases|sort(attribute='created_at', reverse=true) %}
-        <div class="border-b last:border-0 pb-3">
-          <div class="flex justify-between gap-3"><strong>{{ purchase.item_name }}</strong><span>Qty {{ purchase.quantity }}</span></div>
-          <div class="text-sm text-slate-500">Cost ₹{{ '%.2f'|format(purchase.cost_total) }} · Customer charge ₹{{ '%.2f'|format(purchase.sale_total) }}</div>
+        <div class="border-b last:border-0 pb-4">
+          <div class="flex justify-between gap-3"><strong>{{ purchase.item_name }}</strong><span>Purchased {{ purchase.quantity }} · Remaining {{ purchase.remaining_quantity }}</span></div>
+          <div class="text-sm text-slate-500">Original cost ₹{{ '%.2f'|format(purchase.cost_total) }} · Net job cost ₹{{ '%.2f'|format(purchase.net_cost_total) }}</div>
           <div class="text-xs text-slate-500 mt-1">{{ purchase.supplier or 'Supplier not recorded' }}{% if purchase.reference %} · {{ purchase.reference }}{% endif %} · {{ purchase.added_by.email if purchase.added_by else 'Unknown user' }}</div>
+
+          {% if purchase.returns %}
+          <div class="mt-2 space-y-1">{% for returned in purchase.returns %}<div class="text-xs rounded bg-slate-50 dark:bg-slate-800 p-2">Returned {{ returned.quantity }} to <strong>{{ returned.destination }}</strong>{% if returned.inventory_part %} → {{ returned.inventory_part.name }}{% endif %}{% if returned.reason %} · {{ returned.reason }}{% endif %} · {{ returned.processed_by.email }}</div>{% endfor %}</div>
+          {% endif %}
+
+          {% if current_user and current_user.role in ['admin','manager'] and purchase.remaining_quantity > 0 %}
+          <form method="post" action="{{ url_for('materials.return_job_purchase', purchase_id=purchase.id) }}" class="mt-3 border rounded-lg p-3 space-y-2 bg-slate-50 dark:bg-slate-800/40">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="text-xs font-semibold uppercase text-slate-500">Admin / Manager Return</div>
+            <div class="grid md:grid-cols-3 gap-2">
+              <label class="text-xs">Qty<input name="quantity" type="number" min="0.01" max="{{ purchase.remaining_quantity }}" step="0.01" value="{{ purchase.remaining_quantity }}" required class="mt-1 w-full rounded border p-2 bg-transparent"></label>
+              <label class="text-xs">Return To<select name="destination" required class="mt-1 w-full rounded border p-2 dark:bg-slate-800"><option value="Supplier">Supplier</option><option value="Inventory">Inventory</option></select></label>
+              <label class="text-xs">Existing Inventory Item<select name="inventory_part_id" class="mt-1 w-full rounded border p-2 dark:bg-slate-800"><option value="">Auto-create if Inventory</option>{% for part in parts %}<option value="{{ part.id }}">{{ part.name }} · {{ part.sku }}</option>{% endfor %}</select></label>
+            </div>
+            <input name="reason" class="w-full rounded border p-2 bg-transparent text-sm" placeholder="Reason / supplier return reference">
+            <button class="px-3 py-2 bg-red-600 text-white rounded text-sm" onclick="return confirm('Process this part return?');">Process Return</button>
+          </form>
+          {% endif %}
         </div>
         {% else %}<p class="text-sm text-slate-500">No job-specific purchases yet.</p>{% endfor %}
       </div>
     </section>
   </div>
 
-  <p class="text-xs text-slate-500">Customer Charge is recorded for reference and profitability analysis. It does not automatically increase Final Amount because your quoted/final repair price may already include the part.</p>
+  <p class="text-xs text-slate-500">Returned quantities are removed from this job's material cost. Inventory returns increase stock; supplier returns do not.</p>
 </div>
 {% endblock %}
