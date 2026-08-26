@@ -78,6 +78,20 @@ def _stage_title(stage):
     return "QC Before Repair" if stage == "before" else "QC After Repair"
 
 
+def _validate_stage_order(repair, qc, stage):
+    if repair.service_type != "Doorstep":
+        return None
+    if not repair.assigned_technician_id:
+        return "Assign a technician before starting doorstep QC"
+    if stage == "before" and repair.status != "Approved":
+        return "Doorstep job must be Approved before QC Before"
+    if stage == "after" and qc.before_status not in {"Passed", "Waived"}:
+        return "QC Before must be passed or waived before QC After"
+    if stage == "after" and repair.status not in {"Approved", "Completed"}:
+        return "Doorstep job must remain Approved until QC After is completed"
+    return None
+
+
 @qc_bp.route("/repair/<int:repair_id>")
 @permission_required("qc")
 def qc_detail(repair_id):
@@ -102,6 +116,11 @@ def save_qc(repair_id):
         return ("Forbidden", 403)
 
     qc = _ensure_qc(repair)
+    stage_error = _validate_stage_order(repair, qc, stage)
+    if stage_error:
+        flash(stage_error, "error")
+        return redirect(url_for("qc.qc_detail", repair_id=repair.id, stage=stage))
+
     status = request.form.get("status", "Pending")
     if status not in QC_STATUSES:
         flash("Invalid QC status", "error")
@@ -123,19 +142,35 @@ def save_qc(repair_id):
     setattr(qc, tested_at_field, datetime.now(timezone.utc))
     setattr(qc, photos_field, existing_photos)
 
-    if stage == "before":
-        if status in {"Passed", "Waived"} and repair.status in {"Approved", "Waiting Parts"}:
-            repair.status = "In Repair"
+    if repair.service_type == "Doorstep":
+        if stage == "before":
+            # The technician repairs the device at the customer's location after
+            # QC Before. Keep the job Approved while the physical work is being done.
+            repair.status = "Approved"
+        else:
+            qc.status = status
+            qc.checklist = checklist
+            qc.notes = notes
+            qc.tested_by_id = g.current_user.id if g.current_user else None
+            qc.tested_at = getattr(qc, tested_at_field)
+            if status in {"Passed", "Waived"}:
+                repair.status = "Completed"
+            elif status == "Failed":
+                repair.status = "Approved"
     else:
-        qc.status = status
-        qc.checklist = checklist
-        qc.notes = notes
-        qc.tested_by_id = g.current_user.id if g.current_user else None
-        qc.tested_at = getattr(qc, tested_at_field)
-        if status in {"Passed", "Waived"}:
-            repair.status = "Ready"
-        elif status == "Failed":
-            repair.status = "In Repair"
+        if stage == "before":
+            if status in {"Passed", "Waived"} and repair.status in {"Approved", "Waiting Parts"}:
+                repair.status = "In Repair"
+        else:
+            qc.status = status
+            qc.checklist = checklist
+            qc.notes = notes
+            qc.tested_by_id = g.current_user.id if g.current_user else None
+            qc.tested_at = getattr(qc, tested_at_field)
+            if status in {"Passed", "Waived"}:
+                repair.status = "Ready"
+            elif status == "Failed":
+                repair.status = "In Repair"
 
     db.session.commit()
     flash(f"{_stage_title(stage)} marked {status}", "success")
