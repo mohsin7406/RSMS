@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for, g
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, g
 
 from app.extensions import db
-from app.models import Booking, Lead, RepairOrder, User
+from app.models import Booking, Customer, Lead, RepairOrder, User
 from app.models.booking import BOOKING_STATUSES
 from app.security import permission_required, current_user_id
 
@@ -31,26 +31,41 @@ def _ensure_repair_for_booking(booking):
     lead = Lead.query.filter_by(booking_id=booking.id).first()
     device = lead.device if lead and lead.device else "Booking device"
     issue = lead.issue if lead and lead.issue else booking.notes or "Issue to be diagnosed"
-
-    # Doorstep jobs never enter a device-received queue. Once a technician is
-    # assigned and the appointment is confirmed, the operational repair job is
-    # already approved and can proceed to QC Before at the customer's location.
     initial_status = "Approved" if booking.service_type == "Doorstep" and booking.technician_id else "Pending"
 
     repair = RepairOrder(
-        job_number=_job_number(),
-        customer_id=booking.customer_id,
-        assigned_technician_id=booking.technician_id,
-        device=device,
-        issue_description=issue,
-        service_type=booking.service_type,
-        status=initial_status,
-        customer_approved=initial_status == "Approved",
+        job_number=_job_number(), customer_id=booking.customer_id,
+        assigned_technician_id=booking.technician_id, device=device,
+        issue_description=issue, service_type=booking.service_type,
+        status=initial_status, customer_approved=initial_status == "Approved",
     )
     db.session.add(repair)
     db.session.flush()
     booking.repair_id = repair.id
     return repair, True
+
+
+def _form_context():
+    return {
+        "technicians": User.query.filter_by(role="technician").order_by(User.email.asc()).all(),
+        "customers": Customer.query.order_by(Customer.name.asc()).all(),
+    }
+
+
+def _apply_booking_form(booking):
+    try:
+        booking.scheduled_at = datetime.fromisoformat(request.form.get("scheduled_at", ""))
+    except ValueError:
+        return "Invalid scheduled date and time"
+    booking.customer_id = request.form.get("customer_id", type=int)
+    booking.technician_id = request.form.get("technician_id", type=int)
+    booking.service_type = request.form.get("service_type", "Doorstep")
+    booking.address = request.form.get("address", "").strip() or None
+    booking.area = request.form.get("area", "").strip() or None
+    booking.notes = request.form.get("notes", "").strip() or None
+    if not booking.customer_id or db.session.get(Customer, booking.customer_id) is None:
+        return "Customer is required"
+    return None
 
 
 @bookings_bp.route("/")
@@ -63,38 +78,72 @@ def list_bookings():
 @bookings_bp.route("/add", methods=["GET", "POST"])
 @permission_required("bookings")
 def add_booking():
-    technicians = User.query.filter_by(role="technician").order_by(User.email.asc()).all()
+    context = _form_context()
     if request.method == "POST":
-        try:
-            scheduled_at = datetime.fromisoformat(request.form.get("scheduled_at", ""))
-        except ValueError:
-            flash("Invalid scheduled date and time", "error")
-            return render_template("bookings/form.html", technicians=technicians)
-        booking = Booking(
-            booking_number=_booking_number(), customer_id=request.form.get("customer_id", type=int),
-            technician_id=request.form.get("technician_id", type=int), service_type=request.form.get("service_type", "Doorstep"),
-            scheduled_at=scheduled_at, address=request.form.get("address", "").strip() or None,
-            area=request.form.get("area", "").strip() or None, notes=request.form.get("notes", "").strip() or None,
-            status="Assigned" if request.form.get("technician_id", type=int) else "Scheduled",
-        )
-        if not booking.customer_id:
-            flash("Customer is required", "error")
-            return render_template("bookings/form.html", technicians=technicians)
+        booking = Booking(booking_number=_booking_number(), status="Scheduled")
+        error = _apply_booking_form(booking)
+        if error:
+            flash(error, "error")
+            return render_template("bookings/form.html", action="Add", booking=booking, **context)
+        if booking.technician_id:
+            booking.status = "Assigned"
         db.session.add(booking)
         db.session.commit()
         flash(f"Booking {booking.booking_number} created", "success")
         return redirect(url_for("bookings.list_bookings"))
-    return render_template("bookings/form.html", technicians=technicians)
+    return render_template("bookings/form.html", action="Add", **context)
+
+
+@bookings_bp.route("/<int:id>/edit", methods=["GET", "POST"])
+@permission_required("bookings")
+def edit_booking(id):
+    booking = db.session.get(Booking, id)
+    if booking is None:
+        abort(404)
+    context = _form_context()
+    if request.method == "POST":
+        error = _apply_booking_form(booking)
+        if error:
+            flash(error, "error")
+            return render_template("bookings/form.html", action="Edit", booking=booking, **context)
+        if booking.repair_id:
+            repair = db.session.get(RepairOrder, booking.repair_id)
+            if repair:
+                repair.assigned_technician_id = booking.technician_id
+                repair.service_type = booking.service_type
+                repair.customer_id = booking.customer_id
+        db.session.commit()
+        flash("Booking updated", "success")
+        return redirect(url_for("bookings.list_bookings"))
+    return render_template("bookings/form.html", action="Edit", booking=booking, **context)
+
+
+@bookings_bp.route("/<int:id>/delete", methods=["POST"])
+@permission_required("bookings")
+def delete_booking(id):
+    booking = db.session.get(Booking, id)
+    if booking is None:
+        abort(404)
+    if booking.repair_id:
+        flash("Cannot delete a booking that is linked to a repair job.", "error")
+        return redirect(url_for("bookings.list_bookings"))
+    linked_leads = Lead.query.filter_by(booking_id=booking.id).all()
+    for lead in linked_leads:
+        lead.booking_id = None
+        if lead.status == "Booked":
+            lead.status = "Follow Up"
+    db.session.delete(booking)
+    db.session.commit()
+    flash("Booking deleted", "success")
+    return redirect(url_for("bookings.list_bookings"))
 
 
 @bookings_bp.route("/<int:id>/status", methods=["POST"])
 def update_status(id):
     booking = db.session.get(Booking, id)
     if booking is None:
-        from flask import abort
         abort(404)
     if g.current_user is None:
-        from flask import abort
         abort(403)
     if g.current_user.role == "technician":
         if booking.technician_id != current_user_id():
@@ -102,7 +151,6 @@ def update_status(id):
     else:
         from app.roles import has_permission
         if not has_permission(g.current_user.role, "bookings"):
-            from flask import abort
             abort(403)
     status = request.form.get("status", "")
     if status not in BOOKING_STATUSES:
