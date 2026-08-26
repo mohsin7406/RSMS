@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  <div><h1 class="text-2xl font-bold">Warranty — {{ repair.job_number }}</h1><p class="text-slate-500">{{ repair.customer.name }} · {{ repair.device }}</p></div>
+  <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border">
+    <div class="grid md:grid-cols-3 gap-4 text-sm">
+      <div><span class="text-slate-500">Delivered</span><p class="font-medium">{{ repair.delivered_at.strftime('%Y-%m-%d') if repair.delivered_at else 'Not delivered' }}</p></div>
+      <div><span class="text-slate-500">Warranty days</span><p class="font-medium">{{ repair.warranty_days }}</p></div>
+      <div><span class="text-slate-500">Warranty until</span><p class="font-medium">{{ warranty_until.strftime('%Y-%m-%d') if warranty_until else 'No active warranty' }}</p></div>
+    </div>
+  </div>
+  <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border">
+    <h2 class="font-semibold mb-4">Open Warranty Claim</h2>
+    <form method="post" action="{{ url_for('warranty.open_claim', repair_id=repair.id) }}" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="issue" required rows="4" placeholder="Describe the warranty issue" class="w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></textarea>
+      <button class="px-4 py-2 bg-blue-600 text-white rounded-lg">Open Claim</button>
+    </form>
+  </div>
+  <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border">
+    <h2 class="font-semibold mb-4">Claims</h2>
+    {% for claim in repair.warranty_claims %}
+    <form method="post" action="{{ url_for('warranty.update_claim', claim_id=claim.id) }}" class="border rounded-lg p-4 mb-3 space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p><strong>Issue:</strong> {{ claim.issue }}</p>
+      <div class="grid md:grid-cols-2 gap-3"><select name="status" class="px-3 py-2 border rounded-lg dark:bg-slate-800">{% for s in ['Open','In Progress','Resolved','Closed','Rejected'] %}<option value="{{ s }}" {% if claim.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select><input name="resolution" value="{{ claim.resolution or '' }}" placeholder="Resolution" class="px-3 py-2 border rounded-lg dark:bg-slate-800"></div>
+      <button class="px-3 py-2 bg-slate-800 text-white rounded-lg">Update Claim</button>
+    </form>
+    {% else %}<p class="text-slate-500">No warranty claims.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}
