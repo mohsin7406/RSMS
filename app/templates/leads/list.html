@@ -12,7 +12,7 @@
       {% for lead in leads %}
       <tr>
         <td class="px-4 py-3"><div class="font-medium">{{ lead.name }}</div><div class="text-xs text-slate-500">{{ lead.area or '-' }} · {{ lead.service_type }}</div></td>
-        <td class="px-4 py-3">{{ lead.phone }}<div><a href="https://wa.me/{{ ('91' ~ lead.phone|string|replace(' ','')|replace('-','')) if (lead.phone|string|replace(' ','')|replace('-',''))|length == 10 else (lead.phone|string|replace(' ','')|replace('-','')) }}?text={{ ('Hi ' ~ lead.name ~ ', this is FixZone. We received your enquiry for ' ~ (lead.device or 'your device') ~ '.')|urlencode }}" target="_blank" rel="noopener noreferrer" class="text-green-600 text-xs">WhatsApp</a></div></td>
+        <td class="px-4 py-3">{{ lead.phone }}<div><a href="https://wa.me/{{ (system_setting('default_country_code','91') ~ lead.phone|string|replace(' ','')|replace('-','')) if (lead.phone|string|replace(' ','')|replace('-',''))|length == 10 else (lead.phone|string|replace(' ','')|replace('-','')) }}?text={{ ('Hi ' ~ lead.name ~ ', this is ' ~ system_setting('business_name','FixZone') ~ '. We received your enquiry for ' ~ (lead.device or 'your device') ~ '.')|urlencode }}" target="_blank" rel="noopener noreferrer" class="text-green-600 text-xs">WhatsApp</a></div></td>
         <td class="px-4 py-3">{{ lead.device or '-' }}</td>
         <td class="px-4 py-3"><div class="font-medium">{{ lead.contacts|length }} time(s)</div>{% if lead.contacts %}<div class="text-xs text-slate-500">Last: {{ lead.contacts[0].contacted_at.strftime('%d %b %H:%M') }}</div>{% else %}<div class="text-xs text-slate-500">Never</div>{% endif %}</td>
         <td class="px-4 py-3"><span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{{ lead.status }}</span>{% if lead.booking %}<div class="text-xs text-green-600 mt-1">{{ lead.booking.booking_number }}</div>{% endif %}</td>
@@ -22,5 +22,6 @@
       </tbody>
     </table></div>
   </div>
+  {% if pagination.pages > 1 %}<div class="flex flex-wrap items-center justify-between gap-3"><div class="text-sm text-slate-500">Showing {{ ((pagination.page-1)*pagination.per_page)+1 if pagination.total else 0 }}–{{ [pagination.page*pagination.per_page,pagination.total]|min }} of {{ pagination.total }}</div><div class="flex gap-2">{% if pagination.has_prev %}<a href="{{ url_for('leads.list_leads',page=pagination.prev_num) }}" class="border rounded px-3 py-2">← Previous</a>{% endif %}<span class="border rounded px-3 py-2">Page {{ pagination.page }} / {{ pagination.pages }}</span>{% if pagination.has_next %}<a href="{{ url_for('leads.list_leads',page=pagination.next_num) }}" class="border rounded px-3 py-2">Next →</a>{% endif %}</div></div>{% endif %}
 </div>
 {% endblock %}
