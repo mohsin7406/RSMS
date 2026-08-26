@@ -43,6 +43,7 @@ def create_app(config_name=None):
     from app.routes.customer_status import customer_status_bp
     from app.routes.users import users_bp
     from app.routes.notification_settings import notifications_bp
+    from app.routes.sms_logs import sms_logs_bp
 
     # Register SQLAlchemy notification event listeners without rebinding the
     # local Flask ``app`` variable to the top-level ``app`` Python package.
@@ -65,6 +66,7 @@ def create_app(config_name=None):
     app.register_blueprint(customer_status_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(sms_logs_bp)
 
     from app.commands import create_admin, reset_admin_password, seed_db, seed_db_all
     app.cli.add_command(create_admin)
