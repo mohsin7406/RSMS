@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <div><h1 class="text-2xl font-bold">Add Part</h1><p class="text-slate-500">Create an inventory item and optional opening stock.</p></div>
+  <form method="post" class="bg-white dark:bg-slate-900 p-6 rounded-xl border space-y-5">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid md:grid-cols-2 gap-4">
+      {% for name,label,required in [('sku','SKU',True),('name','Part name',True),('brand','Brand',False),('model','Model',False),('category','Category',False),('supplier','Supplier',False),('quantity','Opening quantity',False),('reorder_level','Reorder level',False),('cost_price','Cost price',False),('selling_price','Selling price',False)] %}
+      <label class="block"><span class="text-sm font-medium">{{ label }}</span><input name="{{ name }}" {% if required %}required{% endif %} type="{% if name in ['quantity','reorder_level','cost_price','selling_price'] %}number{% else %}text{% endif %}" {% if name in ['quantity','reorder_level','cost_price','selling_price'] %}step="0.01" min="0"{% endif %} class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
+      {% endfor %}
+    </div>
+    <button class="px-4 py-2 bg-blue-600 text-white rounded-lg">Save Part</button>
+  </form>
+</div>
+{% endblock %}
