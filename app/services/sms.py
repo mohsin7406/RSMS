@@ -40,12 +40,19 @@ def _smsalert_setting():
     return setting
 
 
-def send_sms(mobile, text, *, timeout=10):
+def send_sms(mobile, text, *, timeout=10, repair_id=None, customer_id=None, event="manual"):
     setting = _smsalert_setting()
     phone = _normalize_mobile(mobile)
-    log = SMSLog(mobile=phone, message=text, provider="smsalert.in", status="skipped", attempts=1)
-    if setting is not None:
-        log.provider = setting.provider or "smsalert.in"
+    log = SMSLog(
+        repair_id=repair_id,
+        customer_id=customer_id,
+        event=event,
+        mobile=phone,
+        message=text,
+        provider=(setting.provider if setting else "smsalert.in"),
+        status="skipped",
+        attempts=1,
+    )
     db.session.add(log)
 
     if setting is None:
@@ -103,9 +110,10 @@ def notify_customer(event, repair, **values):
 
     phone = getattr(repair.customer, "phone", None)
     text = text_template.format(job_number=repair.job_number, device=repair.device, **values)
-    result = send_sms(phone, text)
-    # Attach relationships after send so delivery logs can be tied to the repair/customer.
-    log = SMSLog.query.order_by(SMSLog.id.desc()).first()
-    if log is not None and log.message == text and log.mobileno if False else False:
-        pass
-    return result
+    return send_sms(
+        phone,
+        text,
+        repair_id=repair.id,
+        customer_id=repair.customer.id,
+        event=event,
+    )
