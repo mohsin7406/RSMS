@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models import Booking, Customer, Lead, LeadContact, User
 from app.models.lead import LEAD_STATUSES
@@ -32,7 +33,10 @@ def _apply_lead_form(lead):
 @leads_bp.route("/")
 @permission_required("leads")
 def list_leads():
-    page=max(request.args.get("page",1,type=int),1);pagination=Lead.query.order_by(Lead.created_at.desc()).paginate(page=page,per_page=PER_PAGE,error_out=False);return render_template("leads/list.html",leads=pagination.items,pagination=pagination,statuses=LEAD_STATUSES)
+    page=max(request.args.get("page",1,type=int),1)
+    query=Lead.query.options(joinedload(Lead.booking),joinedload(Lead.assigned_to),selectinload(Lead.contacts))
+    pagination=query.order_by(Lead.created_at.desc(),Lead.id.desc()).paginate(page=page,per_page=PER_PAGE,error_out=False)
+    return render_template("leads/list.html",leads=pagination.items,pagination=pagination,statuses=LEAD_STATUSES)
 @leads_bp.route("/<int:id>")
 @permission_required("leads")
 def lead_detail(id):return render_template("leads/detail.html",lead=_get_lead_or_404(id),methods=CONTACT_METHODS,outcomes=CONTACT_OUTCOMES)
