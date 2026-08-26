@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
@@ -81,7 +81,7 @@ def _validate_repair(values):
         return "Invalid repair status"
     if values["payment_status"] not in PAYMENT_STATUSES:
         return "Invalid payment status"
-    if not Customer.query.get(values["customer_id"]):
+    if not db.session.get(Customer, values["customer_id"]):
         return "Selected customer does not exist"
     if values["assigned_technician_id"] is not None:
         technician = User.query.filter_by(id=values["assigned_technician_id"], role="technician").first()
@@ -93,7 +93,7 @@ def _validate_repair(values):
 
 
 def _new_job_number():
-    prefix = datetime.utcnow().strftime("JOB-%Y%m%d")
+    prefix = datetime.now(timezone.utc).strftime("JOB-%Y%m%d")
     latest = RepairOrder.query.filter(RepairOrder.job_number.like(f"{prefix}-%")).order_by(RepairOrder.id.desc()).first()
     sequence = int(latest.job_number.rsplit("-", 1)[-1]) + 1 if latest and latest.job_number.rsplit("-", 1)[-1].isdigit() else 1
     return f"{prefix}-{sequence:04d}"
@@ -173,7 +173,7 @@ def edit_repair(id):
 @role_required("admin")
 def delete_repair(id):
     repair = RepairOrder.query.get_or_404(id)
-    repair.deleted_at = datetime.utcnow()
+    repair.deleted_at = datetime.now(timezone.utc)
     _audit(repair, "archived", None, repair.deleted_at.isoformat())
     db.session.commit()
     flash("Repair order archived", "success")
@@ -238,7 +238,7 @@ def update_repair_status(id):
     if old_status != new_status:
         repair.status = new_status
         if new_status == "Delivered" and repair.delivered_at is None:
-            repair.delivered_at = datetime.utcnow()
+            repair.delivered_at = datetime.now(timezone.utc)
         _audit(repair, "status_changed", old_status, new_status)
     db.session.commit()
     flash("Repair order status updated", "success")
