@@ -26,5 +26,6 @@ from app.models.supplier import Supplier
 from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.models.purchase_return import PurchaseReturn
+from app.models.operations import SupplierPayment, Expense, StockAllocation, AuditEvent
 
-__all__ = ["User","Customer","RepairOrder","RepairAuditLog","Part","PartUsage","PartUsageReturn","StockMovement","Invoice","Payment","RepairQC","WarrantyClaim","Lead","LeadContact","Booking","ServiceConfirmation","RepairPhoto","NotificationTemplate","SMSLog","RolePermission","RepairExtraCharge","JobPurchase","JobPurchaseReturn","InventoryCategory","Supplier","Purchase","PurchaseItem","PurchaseReturn"]
+__all__=["User","Customer","RepairOrder","RepairAuditLog","Part","PartUsage","PartUsageReturn","StockMovement","Invoice","Payment","RepairQC","WarrantyClaim","Lead","LeadContact","Booking","ServiceConfirmation","RepairPhoto","NotificationTemplate","SMSLog","RolePermission","RepairExtraCharge","JobPurchase","JobPurchaseReturn","InventoryCategory","Supplier","Purchase","PurchaseItem","PurchaseReturn","SupplierPayment","Expense","StockAllocation","AuditEvent"]
