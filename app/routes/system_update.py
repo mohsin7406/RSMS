@@ -1,6 +1,8 @@
 import json
 import os
-import shutil
+import shlex
+import subprocess
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +21,12 @@ def _set_maintenance(enabled):
     row=SystemSetting.query.filter_by(key="maintenance_mode").first()
     if row is None: row=SystemSetting(key="maintenance_mode"); db.session.add(row)
     row.value="1" if enabled else "0"; db.session.commit()
+
+def _restart_later(command):
+    def run():
+        try: subprocess.Popen(shlex.split(command),cwd=str(app_root()),start_new_session=True)
+        except Exception: pass
+    threading.Timer(1.0,run).start()
 
 @system_update_bp.route("/")
 @role_required("admin")
@@ -63,6 +71,14 @@ def install(update_id):
         try: _set_maintenance(False)
         except Exception: db.session.rollback()
     return redirect(url_for("system_update.index"))
+
+@system_update_bp.route("/restart",methods=["POST"])
+@role_required("admin")
+def restart_service():
+    command=os.environ.get("RSMS_RESTART_COMMAND","").strip()
+    if not command:
+        flash("Automatic restart is not configured. Restart the Gunicorn/systemd service from the server.","error"); return redirect(url_for("system_update.index"))
+    _restart_later(command); flash("Application restart requested. Refresh this page in a few seconds.","success"); return redirect(url_for("system_update.index"))
 
 @system_update_bp.route("/<int:update_id>/delete",methods=["POST"])
 @role_required("admin")
