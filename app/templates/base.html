@@ -20,8 +20,8 @@
             <a href="{{ url_for('inventory.list_parts') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'inventory' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Inventory</a>
             <a href="{{ url_for('leads.list_leads') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'lead' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Leads</a>
             <a href="{{ url_for('bookings.list_bookings') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'booking' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Bookings</a>
-            <a href="{{ url_for('profitability.job_profitability') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'profitability' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Profitability</a>
-            {% if current_user and current_user.role in ['admin', 'staff', 'technician'] %}
+            <a href="{{ url_for('profitability.profitability') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'profitability' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Profitability</a>
+            {% if current_user and current_user.role == 'technician' %}
             <a href="{{ url_for('technician.dashboard') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'technician' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Technician</a>
             {% endif %}
         </nav>
