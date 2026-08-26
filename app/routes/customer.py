@@ -3,7 +3,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.extensions import db
 from app.models import Customer
-from app.security import login_required, role_required
+from app.security import permission_required, role_required
 
 
 customer_bp = Blueprint("customer", __name__, url_prefix="/customer")
@@ -18,7 +18,7 @@ def _customer_form_values():
 
 
 @customer_bp.route("/add", methods=["GET", "POST"])
-@login_required
+@permission_required("customers")
 def add_customer():
     if request.method == "POST":
         values = _customer_form_values()
@@ -46,7 +46,7 @@ def add_customer():
 
 
 @customer_bp.route("/edit/<int:id>", methods=["GET", "POST"])
-@login_required
+@permission_required("customers")
 def edit_customer(id):
     customer = Customer.query.get_or_404(id)
 
@@ -88,14 +88,14 @@ def delete_customer(id):
 
 
 @customer_bp.route("/view", methods=["GET"])
-@login_required
+@permission_required("customers")
 def view_customers():
     customers = Customer.query.order_by(Customer.created_at.desc()).all()
     return render_template("customers/list.html", customers=customers)
 
 
 @customer_bp.route("/details/<int:id>", methods=["GET"])
-@login_required
+@permission_required("customers")
 def customer_details(id):
     customer = Customer.query.get_or_404(id)
     return render_template("customers/detail.html", customer=customer)
