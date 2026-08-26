@@ -43,6 +43,7 @@ def create_app(config_name=None):
     from app.routes.customer_status import customer_status_bp
     from app.routes.users import users_bp
     from app.routes.notification_settings import notifications_bp
+    import app.services.notification_hooks  # noqa: F401
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
