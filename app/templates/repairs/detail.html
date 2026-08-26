@@ -55,6 +55,22 @@
                 <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Device & Issue</h3>
                 <div class="space-y-4"><div><span class="block text-sm text-slate-500">Device</span><span class="text-lg font-medium">{{ repair.device }}</span></div><div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg"><span class="block text-xs text-slate-500 uppercase font-bold mb-2">Description</span><p class="leading-relaxed">{{ repair.issue_description }}</p></div></div>
             </div>
+
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">WhatsApp Web</h3>
+                        <p class="text-xs text-slate-500 mt-1">Opens your existing WhatsApp Web/app with the message pre-filled.</p>
+                    </div>
+                    <span class="text-xs text-slate-500">{{ repair.customer.phone }}</span>
+                </div>
+                <textarea id="whatsapp-message" rows="4" class="w-full rounded-lg border p-3 bg-transparent text-sm" maxlength="4000">Hi {{ repair.customer.name }}, your FixZone repair {{ repair.job_number }} for {{ repair.device }} is currently {{ repair.status }}.</textarea>
+                <div class="flex flex-wrap gap-3 mt-3">
+                    <button type="button" id="whatsapp-web-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white font-medium">Open WhatsApp</button>
+                    <button type="button" id="whatsapp-copy-btn" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700">Copy Message</button>
+                </div>
+                <p id="whatsapp-hint" class="text-xs text-slate-500 mt-2"></p>
+            </div>
         </div>
         <div class="space-y-6">
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
@@ -68,8 +84,42 @@
                     <div class="space-y-3"><div class="flex items-center justify-between mb-2"><span class="text-sm">Current:</span><span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">{{ repair.status }}</span></div><select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800"><option value="{{ repair.status }}" selected>{{ repair.status }}</option>{% for next_status in {'Pending':['Received','Cancelled'],'Received':['Diagnosing','Cancelled'],'Diagnosing':['Waiting Approval','Approved','Cancelled'],'Waiting Approval':['Approved','Cancelled'],'Approved':['Waiting Parts','In Repair','Cancelled'],'Waiting Parts':['In Repair','Cancelled'],'In Progress':['In Repair','QC','Cancelled'],'In Repair':['QC','Cancelled'],'QC':['In Repair','Ready','Cancelled'],'Ready':['Delivered','In Repair'],'Completed':['Delivered','In Repair']}.get(repair.status, []) %}<option value="{{ next_status }}">{{ next_status }}</option>{% endfor %}</select><button class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium">Update Status</button></div>
                 </form>
             </div>
-            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800"><h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3><p class="font-medium">{{ repair.customer.name }}</p><a href="{{ url_for('repair.repairs_by_customer', customer_id=repair.customer.id) }}" class="text-xs text-blue-500 hover:underline">View History</a></div>
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800"><h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3><p class="font-medium">{{ repair.customer.name }}</p><p class="text-sm text-slate-500 mt-1">{{ repair.customer.phone }}</p><a href="{{ url_for('repair.repairs_by_customer', customer_id=repair.customer.id) }}" class="text-xs text-blue-500 hover:underline">View History</a></div>
         </div>
     </div>
 </div>
+<script>
+(function () {
+    const phone = {{ (repair.customer.phone or '')|tojson }}.replace(/\D/g, '');
+    const message = document.getElementById('whatsapp-message');
+    const openButton = document.getElementById('whatsapp-web-btn');
+    const copyButton = document.getElementById('whatsapp-copy-btn');
+    const hint = document.getElementById('whatsapp-hint');
+
+    function buildWhatsAppUrl() {
+        let normalized = phone;
+        if (normalized.length === 10) normalized = '91' + normalized;
+        if (!normalized) return null;
+        return 'https://wa.me/' + normalized + '?text=' + encodeURIComponent(message.value);
+    }
+
+    openButton?.addEventListener('click', function () {
+        const url = buildWhatsAppUrl();
+        if (!url) {
+            hint.textContent = 'Customer does not have a valid phone number.';
+            return;
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
+    });
+
+    copyButton?.addEventListener('click', async function () {
+        try {
+            await navigator.clipboard.writeText(message.value);
+            hint.textContent = 'Message copied.';
+        } catch (error) {
+            hint.textContent = 'Copy failed. Select the message and copy it manually.';
+        }
+    });
+})();
+</script>
 {% endblock %}
