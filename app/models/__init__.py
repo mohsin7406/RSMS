@@ -13,9 +13,10 @@ from app.models.lead import Lead
 from app.models.booking import Booking
 from app.models.service_confirmation import ServiceConfirmation
 from app.models.repair_photo import RepairPhoto
+from app.models.notification_template import NotificationTemplate
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage",
     "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "Booking",
-    "ServiceConfirmation", "RepairPhoto",
+    "ServiceConfirmation", "RepairPhoto", "NotificationTemplate",
 ]
