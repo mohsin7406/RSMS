@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for, g
 
@@ -32,7 +32,7 @@ def open_claim(repair_id):
         flash("This repair has no active warranty", "error")
         return redirect(url_for("warranty.repair_warranty", repair_id=repair_id))
     warranty_until = repair.delivered_at + timedelta(days=repair.warranty_days)
-    if datetime.utcnow() > warranty_until:
+    if datetime.now(timezone.utc) > warranty_until:
         flash("Warranty period has expired", "error")
         return redirect(url_for("warranty.repair_warranty", repair_id=repair_id))
 
@@ -61,7 +61,7 @@ def update_claim(claim_id):
     claim.resolution = request.form.get("resolution", "").strip() or claim.resolution
     claim.handled_by_id = g.current_user.id if g.current_user else claim.handled_by_id
     if status in {"Resolved", "Closed", "Rejected"}:
-        claim.resolved_at = claim.resolved_at or datetime.utcnow()
+        claim.resolved_at = claim.resolved_at or datetime.now(timezone.utc)
     db.session.commit()
     flash("Warranty claim updated", "success")
     return redirect(url_for("warranty.repair_warranty", repair_id=claim.repair_id))
