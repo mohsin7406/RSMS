@@ -21,10 +21,12 @@ from app.models.role_permission import RolePermission
 from app.models.repair_extra_charge import RepairExtraCharge
 from app.models.job_purchase import JobPurchase
 from app.models.job_purchase_return import JobPurchaseReturn
+from app.models.inventory_category import InventoryCategory
+from app.models.supplier import Supplier
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage", "PartUsageReturn",
     "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "LeadContact", "Booking",
     "ServiceConfirmation", "RepairPhoto", "NotificationTemplate", "SMSLog", "RolePermission", "RepairExtraCharge",
-    "JobPurchase", "JobPurchaseReturn",
+    "JobPurchase", "JobPurchaseReturn", "InventoryCategory", "Supplier",
 ]
