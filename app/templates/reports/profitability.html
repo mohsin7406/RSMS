@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-6">
+  <div><h1 class="text-2xl font-bold">Profitability</h1><p class="text-slate-500">Revenue minus actual parts cost for each repair.</p></div>
+  <div class="grid md:grid-cols-4 gap-4">
+    {% for label,value in [('Revenue','₹%.2f'|format(totals.revenue)),('Parts Cost','₹%.2f'|format(totals.parts_cost)),('Parts Revenue','₹%.2f'|format(totals.parts_revenue)),('Gross Profit','₹%.2f'|format(totals.profit))] %}
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border"><p class="text-sm text-slate-500">{{ label }}</p><p class="text-xl font-bold mt-2">{{ value }}</p></div>
+    {% endfor %}
+  </div>
+  <div class="overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border">
+    <table class="w-full text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="p-3 text-left">Job</th><th class="p-3 text-left">Customer</th><th class="p-3 text-left">Technician</th><th class="p-3 text-right">Revenue</th><th class="p-3 text-right">Parts Cost</th><th class="p-3 text-right">Profit</th></tr></thead><tbody>
+      {% for row in rows %}<tr class="border-t"><td class="p-3"><a class="text-blue-600" href="{{ url_for('repair.view_repair', id=row.repair.id) }}">{{ row.repair.job_number }}</a></td><td class="p-3">{{ row.repair.customer.name }}</td><td class="p-3">{{ row.repair.assigned_technician.email if row.repair.assigned_technician else 'Unassigned' }}</td><td class="p-3 text-right">₹{{ '%.2f'|format(row.revenue) }}</td><td class="p-3 text-right">₹{{ '%.2f'|format(row.parts_cost) }}</td><td class="p-3 text-right font-semibold">₹{{ '%.2f'|format(row.profit) }}</td></tr>{% else %}<tr><td colspan="6" class="p-8 text-center text-slate-500">No repairs found.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+{% endblock %}
