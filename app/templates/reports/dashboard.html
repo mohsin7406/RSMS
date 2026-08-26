@@ -20,6 +20,6 @@
     <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border"><h2 class="font-semibold mb-4">Technician Jobs</h2>{% for tech,count in technician_counts.items() %}<div class="flex justify-between py-2 border-b last:border-0"><span>{{ tech }}</span><strong>{{ count }}</strong></div>{% else %}<p class="text-slate-500">No technician data.</p>{% endfor %}</div>
     <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border"><h2 class="font-semibold mb-4">Low Stock</h2>{% for part in low_stock %}<div class="flex justify-between py-2 border-b last:border-0"><span>{{ part.name }}</span><strong>{{ part.quantity }}</strong></div>{% else %}<p class="text-slate-500">No low-stock items.</p>{% endfor %}</div>
   </div>
-  <div class="flex gap-3"><a href="{{ url_for('reports.repair_report') }}" class="px-4 py-2 rounded-lg bg-slate-800 text-white">Repair Report</a><a href="{{ url_for('profitability.profitability') }}" class="px-4 py-2 rounded-lg bg-blue-600 text-white">Profitability</a></div>
+  <div class="flex gap-3 flex-wrap"><a href="{{ url_for('reports.repair_report') }}" class="px-4 py-2 rounded-lg bg-slate-800 text-white">Repair Report</a><a href="{{ url_for('profitability.profitability') }}" class="px-4 py-2 rounded-lg bg-blue-600 text-white">Profitability</a>{% if has_permission('inventory') %}<a href="{{ url_for('inventory.inventory_report') }}" class="px-4 py-2 rounded-lg bg-emerald-600 text-white">Inventory Report</a>{% endif %}</div>
 </div>
 {% endblock %}
