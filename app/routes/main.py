@@ -1,4 +1,4 @@
-from flask import Blueprint, redirect, render_template, session, url_for
+from flask import Blueprint, g, redirect, render_template, session, url_for
 
 from app.models import Customer, RepairOrder
 from app.security import login_required
@@ -17,6 +17,9 @@ def home():
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
+    if g.current_user and g.current_user.role == "technician":
+        return redirect(url_for("technician.dashboard"))
+
     total_customers = Customer.query.count()
     active_repairs = RepairOrder.query.filter(RepairOrder.deleted_at.is_(None))
     total_repairs = active_repairs.count()
