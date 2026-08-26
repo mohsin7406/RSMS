@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
@@ -12,18 +12,81 @@ from app.security import role_required, current_user_id
 technician_bp = Blueprint("technician", __name__, url_prefix="/technician")
 
 
-@technician_bp.route("/")
-@role_required("technician")
-def dashboard():
-    bookings = Booking.query.filter_by(technician_id=current_user_id()).order_by(Booking.scheduled_at.asc()).all()
-    repairs = (
+def _assigned_repairs(technician_id):
+    return (
         RepairOrder.query
-        .filter_by(assigned_technician_id=current_user_id())
+        .filter_by(assigned_technician_id=technician_id)
         .filter(RepairOrder.deleted_at.is_(None))
         .order_by(RepairOrder.updated_at.desc())
         .all()
     )
-    return render_template("technician/dashboard.html", bookings=bookings, repairs=repairs, statuses=REPAIR_STATUSES)
+
+
+@technician_bp.route("/")
+@role_required("technician")
+def dashboard():
+    technician_id = current_user_id()
+    now = datetime.now()
+    today_start = datetime.combine(now.date(), time.min)
+    tomorrow_start = datetime.combine(now.date(), time.max)
+
+    all_bookings = (
+        Booking.query.filter_by(technician_id=technician_id)
+        .filter(Booking.status.notin_(["Completed", "Cancelled"]))
+        .order_by(Booking.scheduled_at.asc())
+        .all()
+    )
+    today_bookings = [b for b in all_bookings if today_start <= b.scheduled_at <= tomorrow_start]
+    upcoming_bookings = [b for b in all_bookings if b.scheduled_at > tomorrow_start]
+
+    repairs = _assigned_repairs(technician_id)
+    qc_by_repair = {
+        qc.repair_id: qc
+        for qc in RepairQC.query.filter(RepairQC.repair_id.in_([r.id for r in repairs])).all()
+    } if repairs else {}
+
+    qc_before_pending = []
+    qc_after_pending = []
+    in_repair = []
+    waiting_parts = []
+    ready = []
+
+    for repair in repairs:
+        qc = qc_by_repair.get(repair.id)
+        if repair.status in {"Approved", "Waiting Parts"} and (qc is None or qc.before_status not in {"Passed", "Waived"}):
+            qc_before_pending.append(repair)
+        if repair.status == "In Repair":
+            in_repair.append(repair)
+        if repair.status == "Waiting Parts":
+            waiting_parts.append(repair)
+        if repair.status == "QC" and (qc is None or qc.after_status not in {"Passed", "Waived"}):
+            qc_after_pending.append(repair)
+        if repair.status == "Ready":
+            ready.append(repair)
+
+    stats = {
+        "today_bookings": len(today_bookings),
+        "qc_before": len(qc_before_pending),
+        "in_repair": len(in_repair),
+        "waiting_parts": len(waiting_parts),
+        "qc_after": len(qc_after_pending),
+        "ready": len(ready),
+        "assigned": len(repairs),
+    }
+
+    return render_template(
+        "technician/dashboard.html",
+        bookings=today_bookings,
+        upcoming_bookings=upcoming_bookings,
+        repairs=repairs,
+        qc_before_pending=qc_before_pending,
+        qc_after_pending=qc_after_pending,
+        in_repair=in_repair,
+        waiting_parts=waiting_parts,
+        ready=ready,
+        stats=stats,
+        statuses=REPAIR_STATUSES,
+    )
 
 
 @technician_bp.route("/booking/<int:id>/status", methods=["POST"])
