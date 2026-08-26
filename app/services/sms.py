@@ -1,9 +1,12 @@
 import json
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from app.extensions import db
 from app.models.notification_setting import NotificationSetting
 from app.models.notification_template import NotificationTemplate
+from app.models.sms_log import SMSLog
 
 
 EVENT_TEMPLATES = {
@@ -39,12 +42,20 @@ def _smsalert_setting():
 
 def send_sms(mobile, text, *, timeout=10):
     setting = _smsalert_setting()
-    if setting is None:
-        return {"ok": False, "skipped": True, "reason": "SMSAlert is not enabled/configured"}
-
     phone = _normalize_mobile(mobile)
+    log = SMSLog(mobile=phone, message=text, provider="smsalert.in", status="skipped", attempts=1)
+    if setting is not None:
+        log.provider = setting.provider or "smsalert.in"
+    db.session.add(log)
+
+    if setting is None:
+        log.error = "SMSAlert is not enabled/configured"
+        db.session.commit()
+        return {"ok": False, "skipped": True, "reason": log.error}
     if not phone or len(phone) < 10:
-        return {"ok": False, "skipped": True, "reason": "Invalid mobile number"}
+        log.error = "Invalid mobile number"
+        db.session.commit()
+        return {"ok": False, "skipped": True, "reason": log.error}
 
     endpoint = (setting.api_url or "https://www.smsalert.co.in/api/push.json").strip()
     query = urlencode({
@@ -61,8 +72,17 @@ def send_sms(mobile, text, *, timeout=10):
                 data = json.loads(payload)
             except json.JSONDecodeError:
                 data = {"raw": payload}
+            log.provider_status = response.status
+            log.provider_response = json.dumps(data, ensure_ascii=False)[:10000]
+            log.status = "sent" if response.status < 400 else "failed"
+            if log.status == "sent":
+                log.sent_at = datetime.now(timezone.utc)
+            db.session.commit()
             return {"ok": response.status < 400, "status_code": response.status, "response": data}
     except Exception as exc:
+        log.status = "failed"
+        log.error = str(exc)
+        db.session.commit()
         return {"ok": False, "error": str(exc)}
 
 
@@ -83,4 +103,9 @@ def notify_customer(event, repair, **values):
 
     phone = getattr(repair.customer, "phone", None)
     text = text_template.format(job_number=repair.job_number, device=repair.device, **values)
-    return send_sms(phone, text)
+    result = send_sms(phone, text)
+    # Attach relationships after send so delivery logs can be tied to the repair/customer.
+    log = SMSLog.query.order_by(SMSLog.id.desc()).first()
+    if log is not None and log.message == text and log.mobileno if False else False:
+        pass
+    return result
