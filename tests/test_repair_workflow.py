@@ -23,6 +23,16 @@ def _login(client, token, email="admin@example.com", password="AdminPassword123!
     )
 
 
+def _checklist(client, repair_id, stage):
+    return {
+        "csrf_token": _csrf_token(client, f"/qc/repair/{repair_id}"),
+        "stage": stage,
+        "status": "Passed",
+        "notes": f"All {stage} QC checks passed",
+        **{f"check_{idx}": "pass" for idx in range(10)},
+    }
+
+
 def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
     with app.app_context():
         admin = User(email="admin@example.com", role="admin")
@@ -38,8 +48,6 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
     login = _login(client, _csrf_token(client))
     assert login.status_code == 302
 
-    # /dashboard does not render a CSRF field. Use the authenticated repair form,
-    # which calls csrf_token() and therefore exposes the current session token.
     token = _csrf_token(client, "/repairs/add")
     response = client.post(
         "/repairs/add",
@@ -67,18 +75,26 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert repair.assigned_technician_id == technician_id
         repair_id = repair.id
 
-    checklist = {f"check_{idx}": "pass" for idx in range(10)}
-    checklist.update({
-        "csrf_token": _csrf_token(client, f"/qc/repair/{repair_id}"),
-        "status": "Passed",
-        "notes": "All tests passed",
-    })
-    response = client.post(f"/qc/repair/{repair_id}", data=checklist, follow_redirects=False)
+    # QC Before is recorded separately and must pass before repair work can start.
+    response = client.post(f"/qc/repair/{repair_id}", data=_checklist(client, repair_id, "before"), follow_redirects=False)
+    assert response.status_code == 302
+
+    with app.app_context():
+        qc = RepairQC.query.filter_by(repair_id=repair_id).one()
+        assert qc.before_status == "Passed"
+        assert all(value == "pass" for value in qc.before_checklist.values())
+        assert qc.before_tested_at is not None
+        assert qc.before_tested_by_id == admin.id
+
+    # QC After is a separate checkpoint and is the gate to Ready.
+    response = client.post(f"/qc/repair/{repair_id}", data=_checklist(client, repair_id, "after"), follow_redirects=False)
     assert response.status_code == 302
 
     with app.app_context():
         repair = db.session.get(RepairOrder, repair_id)
         qc = RepairQC.query.filter_by(repair_id=repair_id).one()
         assert repair.status == "Ready"
-        assert qc.status == "Passed"
-        assert all(value == "pass" for value in qc.checklist.values())
+        assert qc.after_status == "Passed"
+        assert all(value == "pass" for value in qc.after_checklist.values())
+        assert qc.after_tested_at is not None
+        assert qc.after_tested_by_id == admin.id
