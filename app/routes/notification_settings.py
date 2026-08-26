@@ -3,6 +3,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from app.extensions import db
 from app.models.notification_setting import NotificationSetting
 from app.security import role_required
+from app.services.smsalert import SMSAlertError, send_sms
 
 notifications_bp = Blueprint("notifications", __name__, url_prefix="/settings/notifications")
 
@@ -30,3 +31,33 @@ def settings():
         flash("Notification settings saved", "success")
         return redirect(url_for("notifications.settings"))
     return render_template("settings/notifications.html", sms=sms, whatsapp=whatsapp)
+
+
+@notifications_bp.post("/test-sms")
+@role_required("admin")
+def test_sms():
+    setting = NotificationSetting.query.filter_by(channel="sms").first()
+    mobile = request.form.get("mobile", "").strip()
+    text = request.form.get("text", "RSMS SMS test").strip()
+
+    if not setting or not setting.enabled:
+        flash("SMS is not enabled", "error")
+        return redirect(url_for("notifications.settings"))
+    if not setting.provider or setting.provider.lower() != "smsalert.in":
+        flash("SMS provider must be SMSAlert.in", "error")
+        return redirect(url_for("notifications.settings"))
+
+    try:
+        result = send_sms(
+            api_key=setting.api_key or "",
+            sender=setting.sender_id or "",
+            mobile=mobile,
+            text=text,
+            api_url=setting.api_url,
+        )
+    except SMSAlertError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("notifications.settings"))
+
+    flash(f"SMSAlert request accepted (HTTP {result.status_code})", "success")
+    return redirect(url_for("notifications.settings"))
