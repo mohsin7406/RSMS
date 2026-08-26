@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, g
+from sqlalchemy import or_
 from app.extensions import db
 from app.models import Booking, Customer, Lead, RepairOrder, User
 from app.models.booking import BOOKING_STATUSES
@@ -7,9 +8,14 @@ from app.security import permission_required, current_user_id
 from app.services.settings import format_number, get_bool, get_int, get_options, get_setting
 
 bookings_bp=Blueprint("bookings",__name__,url_prefix="/bookings")
+PER_PAGE=20
+TERMINAL_BOOKING_STATUSES={"Completed","Cancelled"}
+TERMINAL_REPAIR_STATUSES={"Completed","Delivered","Cancelled"}
+
 def _booking_number():
     today=datetime.now(timezone.utc).strftime("%Y%m%d");latest=Booking.query.filter(Booking.booking_number.like(f"BOOK-{today}-%")).order_by(Booking.id.desc()).first();seq=int(latest.booking_number.rsplit("-",1)[-1])+1 if latest else 1;return f"BOOK-{today}-{seq:04d}"
 def _job_number():return format_number("job_prefix","JOB",RepairOrder,"job_number",datetime.now(timezone.utc))
+def _is_terminal(booking):return booking.status in TERMINAL_BOOKING_STATUSES or bool(booking.repair and booking.repair.status in TERMINAL_REPAIR_STATUSES)
 def _ensure_repair_for_booking(booking):
     if booking.repair_id:return db.session.get(RepairOrder,booking.repair_id),False
     lead=Lead.query.filter_by(booking_id=booking.id).first();device=lead.device if lead and lead.device else "Booking device";issue=lead.issue if lead and lead.issue else booking.notes or "Issue to be diagnosed";initial="Approved" if booking.service_type=="Doorstep" and booking.technician_id else "Pending";repair=RepairOrder(job_number=_job_number(),customer_id=booking.customer_id,assigned_technician_id=booking.technician_id,device=device,issue_description=issue,service_type=booking.service_type,status=initial,customer_approved=initial=="Approved",warranty_days=get_int("default_warranty_days",0));db.session.add(repair);db.session.flush();booking.repair_id=repair.id;return repair,True
@@ -24,9 +30,20 @@ def _apply_booking_form(booking):
     if (start and clock<start) or (end and clock>end):return f"Booking time must be between {start} and {end}"
     if booking.technician_id and User.query.filter_by(id=booking.technician_id,role="technician").first() is None:return "Selected technician is invalid"
     return None
+
 @bookings_bp.route("/")
 @permission_required("bookings")
-def list_bookings():return render_template("bookings/list.html",bookings=Booking.query.order_by(Booking.scheduled_at).all(),statuses=BOOKING_STATUSES,cancellation_reasons=get_options("cancellation_reasons"))
+def list_bookings():
+    page=max(request.args.get("page",1,type=int),1);view=request.args.get("view","active")
+    query=Booking.query.outerjoin(RepairOrder,Booking.repair_id==RepairOrder.id)
+    terminal_repair=RepairOrder.status.in_(TERMINAL_REPAIR_STATUSES)
+    if view=="history":
+        query=query.filter(or_(Booking.status.in_(TERMINAL_BOOKING_STATUSES),terminal_repair)).order_by(Booking.updated_at.desc())
+    else:
+        view="active";query=query.filter(~Booking.status.in_(TERMINAL_BOOKING_STATUSES),or_(Booking.repair_id.is_(None),~terminal_repair)).order_by(Booking.scheduled_at.asc())
+    pagination=query.paginate(page=page,per_page=PER_PAGE,error_out=False)
+    return render_template("bookings/list.html",bookings=pagination.items,pagination=pagination,view=view,statuses=BOOKING_STATUSES,cancellation_reasons=get_options("cancellation_reasons"))
+
 @bookings_bp.route("/add",methods=["GET","POST"])
 @permission_required("bookings")
 def add_booking():
@@ -37,11 +54,13 @@ def add_booking():
         if booking.technician_id:booking.status="Assigned"
         db.session.add(booking);db.session.commit();flash(f"Booking {booking.booking_number} created","success");return redirect(url_for("bookings.list_bookings"))
     return render_template("bookings/form.html",action="Add",**context)
+
 @bookings_bp.route("/<int:id>/edit",methods=["GET","POST"])
 @permission_required("bookings")
 def edit_booking(id):
     booking=db.session.get(Booking,id)
     if booking is None:abort(404)
+    if _is_terminal(booking):flash("Completed or cancelled bookings are read-only. Open the linked repair for job history.","error");return redirect(url_for("bookings.list_bookings",view="history"))
     context=_form_context()
     if request.method=="POST":
         error=_apply_booking_form(booking)
@@ -50,10 +69,10 @@ def edit_booking(id):
             repair=db.session.get(RepairOrder,booking.repair_id)
             if repair:
                 repair.assigned_technician_id=booking.technician_id;repair.service_type=booking.service_type;repair.customer_id=booking.customer_id
-                if repair.service_type=="Doorstep" and repair.status=="Pending" and booking.technician_id:
-                    repair.status="Approved";repair.customer_approved=True
+                if repair.service_type=="Doorstep" and repair.status=="Pending" and booking.technician_id:repair.status="Approved";repair.customer_approved=True
         db.session.commit();flash("Booking updated","success");return redirect(url_for("bookings.list_bookings"))
     return render_template("bookings/form.html",action="Edit",booking=booking,**context)
+
 @bookings_bp.route("/<int:id>/delete",methods=["POST"])
 @permission_required("bookings")
 def delete_booking(id):
@@ -62,11 +81,13 @@ def delete_booking(id):
     if booking.repair_id:flash("Cannot delete a booking that is linked to a repair job.","error");return redirect(url_for("bookings.list_bookings"))
     for lead in Lead.query.filter_by(booking_id=booking.id).all():lead.booking_id=None;lead.status="Follow Up" if lead.status=="Booked" else lead.status
     db.session.delete(booking);db.session.commit();flash("Booking deleted","success");return redirect(url_for("bookings.list_bookings"))
+
 @bookings_bp.route("/<int:id>/status",methods=["POST"])
 def update_status(id):
     booking=db.session.get(Booking,id)
     if booking is None:abort(404)
     if g.current_user is None:abort(403)
+    if _is_terminal(booking):flash("This booking/job is completed or cancelled and its status is locked.","error");return redirect(url_for("bookings.list_bookings",view="history"))
     if g.current_user.role=="technician":
         if booking.technician_id!=current_user_id():return ("Forbidden",403)
     else:
@@ -82,8 +103,7 @@ def update_status(id):
         if booking.repair_id:
             linked=db.session.get(RepairOrder,booking.repair_id)
             if linked and linked.status in {"Pending","Approved"}:linked.status="Cancelled"
-    else:
-        booking.cancellation_reason=None
+    else:booking.cancellation_reason=None
     booking.status=status;repair=None;created=False
     if status in {"Confirmed","Started","Completed"}:repair,created=_ensure_repair_for_booking(booking)
     db.session.commit()
