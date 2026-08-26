@@ -1,7 +1,7 @@
 import re
 
 from app.extensions import db
-from app.models import Booking, Customer, Lead, LeadContact, User
+from app.models import Booking, Customer, Lead, LeadContact, RepairOrder, User
 
 
 def _csrf(client, path="/leads/"):
@@ -12,7 +12,7 @@ def _csrf(client, path="/leads/"):
     return match.group(1)
 
 
-def test_lead_keeps_multiple_contacts_and_confirmation_creates_booking(app, client):
+def test_lead_keeps_multiple_contacts_and_confirmation_creates_booking_then_repair(app, client):
     with app.app_context():
         user = User(email="reception@example.com", role="reception")
         user.set_password("ReceptionPassword123!")
@@ -71,4 +71,36 @@ def test_lead_keeps_multiple_contacts_and_confirmation_creates_booking(app, clie
         assert Booking.query.count() == 1
         assert Customer.query.filter_by(phone="9999999999").count() == 1
         assert LeadContact.query.filter_by(lead_id=lead_id).count() == 3
-        assert lead.booking.status == "Confirmed"
+        assert lead.booking.status == "Scheduled"
+        booking_id = lead.booking_id
+        assert lead.booking.repair_id is None
+
+    token = _csrf(client, "/bookings/")
+    booking_confirmed = client.post(
+        f"/bookings/{booking_id}/status",
+        data={"csrf_token": token, "status": "Confirmed"},
+        follow_redirects=False,
+    )
+    assert booking_confirmed.status_code == 302
+
+    with app.app_context():
+        booking = db.session.get(Booking, booking_id)
+        assert booking.status == "Confirmed"
+        assert booking.repair_id is not None
+        assert RepairOrder.query.count() == 1
+        repair = db.session.get(RepairOrder, booking.repair_id)
+        assert repair.customer_id == booking.customer_id
+        assert repair.device == "iPhone 15 Pro"
+        assert repair.issue_description == "Display issue"
+        assert repair.status == "Pending"
+
+    # Re-confirming must not create a duplicate repair.
+    token = _csrf(client, "/bookings/")
+    again = client.post(
+        f"/bookings/{booking_id}/status",
+        data={"csrf_token": token, "status": "Confirmed"},
+        follow_redirects=False,
+    )
+    assert again.status_code == 302
+    with app.app_context():
+        assert RepairOrder.query.count() == 1
