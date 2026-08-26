@@ -52,9 +52,10 @@ def view_customers(): return render_template("customers/list.html",customers=Cus
 def customer_details(id):
     customer=Customer.query.get_or_404(id)
     repairs=RepairOrder.query.filter_by(customer_id=id).filter(RepairOrder.deleted_at.is_(None)).order_by(RepairOrder.created_at.desc()).all()
-    payments=Payment.query.filter(Payment.repair_id.in_([r.id for r in repairs])).order_by(Payment.created_at.desc()).all() if repairs else []
+    repair_ids=[r.id for r in repairs]
+    payments=Payment.query.filter(Payment.repair_id.in_(repair_ids)).order_by(Payment.created_at.desc()).all() if repair_ids else []
     bookings=Booking.query.filter_by(customer_id=id).order_by(Booking.created_at.desc()).all()
     leads=Lead.query.filter_by(customer_id=id).order_by(Lead.created_at.desc()).all()
-    warranties=WarrantyClaim.query.filter(WarrantyClaim.repair_id.in_([r.id for r in repairs])).order_by(WarrantyClaim.created_at.desc()).all() if repairs else []
+    warranties=WarrantyClaim.query.filter(WarrantyClaim.repair_id.in_(repair_ids)).order_by(WarrantyClaim.opened_at.desc()).all() if repair_ids else []
     billed=sum((Decimal(r.final_amount or 0) for r in repairs),Decimal("0")); paid=sum((Decimal(p.amount or 0) for p in payments if p.payment_type=="Payment"),Decimal("0")); refunded=sum((Decimal(p.amount or 0) for p in payments if p.payment_type=="Refund"),Decimal("0")); net_paid=max(paid-refunded,Decimal("0")); outstanding=max(billed-net_paid,Decimal("0"))
     return render_template("customers/detail.html",customer=customer,repairs=repairs,payments=payments,bookings=bookings,leads=leads,warranties=warranties,billed=billed,net_paid=net_paid,outstanding=outstanding)
