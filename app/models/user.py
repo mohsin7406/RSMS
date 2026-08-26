@@ -1,8 +1,6 @@
 from app.extensions import db
+from app.roles import VALID_ROLES
 from werkzeug.security import check_password_hash, generate_password_hash
-
-
-VALID_ROLES = {"admin", "staff", "technician", "customer"}
 
 
 class User(db.Model):
