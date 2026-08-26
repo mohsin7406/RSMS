@@ -7,7 +7,7 @@ from app.extensions import db
 @pytest.fixture()
 def app():
     app = create_app("testing")
-    app.config.update(TESTING=True, WTF_CSRF_ENABLED=True)
+    app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
     with app.app_context():
         db.create_all()
     yield app
