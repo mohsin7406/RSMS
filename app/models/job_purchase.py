@@ -22,9 +22,26 @@ class JobPurchase(db.Model):
     added_by = db.relationship("User", foreign_keys=[added_by_id])
 
     @property
+    def returned_quantity(self):
+        return sum((return_row.quantity for return_row in self.returns), Decimal("0"))
+
+    @property
+    def remaining_quantity(self):
+        remaining = self.quantity - self.returned_quantity
+        return remaining if remaining > 0 else Decimal("0")
+
+    @property
     def cost_total(self):
         return self.quantity * self.unit_cost
 
     @property
+    def net_cost_total(self):
+        return self.remaining_quantity * self.unit_cost
+
+    @property
     def sale_total(self):
         return self.quantity * self.unit_price
+
+    @property
+    def net_sale_total(self):
+        return self.remaining_quantity * self.unit_price
