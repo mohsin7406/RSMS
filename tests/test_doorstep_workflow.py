@@ -45,15 +45,15 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         db.session.add(booking)
         db.session.commit()
         admin_id = admin.id
+        technician_id = technician.id
         booking_id = booking.id
 
     with client.session_transaction() as session:
         session["user_id"] = admin_id
 
-    token = _csrf(client, "/bookings/")
     response = client.post(
         f"/bookings/{booking_id}/status",
-        data={"csrf_token": token, "status": "Confirmed"},
+        data={"csrf_token": _csrf(client, "/bookings/"), "status": "Confirmed"},
         follow_redirects=False,
     )
     assert response.status_code == 302
@@ -63,38 +63,27 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         repair = db.session.get(RepairOrder, booking.repair_id)
         assert repair is not None
         assert repair.service_type == "Doorstep"
-        assert repair.assigned_technician_id is not None
+        assert repair.assigned_technician_id == technician_id
         assert repair.status == "Approved"
         repair.final_amount = Decimal("1500.00")
         db.session.commit()
         repair_id = repair.id
 
-    response = client.post(
-        f"/qc/repair/{repair_id}",
-        data=_checklist(client, repair_id, "before"),
-        follow_redirects=False,
-    )
+    response = client.post(f"/qc/repair/{repair_id}", data=_checklist(client, repair_id, "before"), follow_redirects=False)
+    assert response.status_code == 302
+    response = client.post(f"/qc/repair/{repair_id}", data=_checklist(client, repair_id, "after"), follow_redirects=False)
     assert response.status_code == 302
 
     with app.app_context():
         repair = db.session.get(RepairOrder, repair_id)
         qc = RepairQC.query.filter_by(repair_id=repair_id).one()
         assert qc.before_status == "Passed"
-        assert repair.status == "Approved"
-
-    response = client.post(
-        f"/qc/repair/{repair_id}",
-        data=_checklist(client, repair_id, "after"),
-        follow_redirects=False,
-    )
-    assert response.status_code == 302
-
-    with app.app_context():
-        repair = db.session.get(RepairOrder, repair_id)
-        qc = RepairQC.query.filter_by(repair_id=repair_id).one()
         assert qc.after_status == "Passed"
         assert repair.status == "Completed"
 
+    # Technician collects payment on the assigned completed job, but does not issue the invoice.
+    with client.session_transaction() as session:
+        session["user_id"] = technician_id
     response = client.post(
         f"/billing/repair/{repair_id}/doorstep-payment",
         data={
@@ -109,11 +98,27 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
 
     with app.app_context():
         repair = db.session.get(RepairOrder, repair_id)
-        invoice = Invoice.query.filter_by(repair_id=repair_id).one()
         payment = Payment.query.filter_by(repair_id=repair_id).one()
         assert repair.payment_status == "Paid"
         assert repair.amount_paid == Decimal("1500.00")
-        assert invoice.status == "Paid"
-        assert invoice.total == Decimal("1500.00")
+        assert Invoice.query.filter_by(repair_id=repair_id).count() == 0
+        assert payment.invoice_id is None
         assert payment.amount == Decimal("1500.00")
         assert payment.payment_method == "UPI"
+
+    # Admin/Accounts can issue the invoice afterward; the existing payment is linked to it.
+    with client.session_transaction() as session:
+        session["user_id"] = admin_id
+    response = client.post(
+        f"/billing/repair/{repair_id}/invoice",
+        data={"csrf_token": _csrf(client, f"/repairs/view/{repair_id}"), "discount": "0", "tax": "0"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with app.app_context():
+        invoice = Invoice.query.filter_by(repair_id=repair_id).one()
+        payment = Payment.query.filter_by(repair_id=repair_id).one()
+        assert invoice.status == "Paid"
+        assert invoice.total == Decimal("1500.00")
+        assert payment.invoice_id == invoice.id
