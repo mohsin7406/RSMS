@@ -100,6 +100,8 @@ def _new_job_number():
 
 
 def _delivery_allowed(repair):
+    if repair.status == "Delivered":
+        return True, None
     if repair.status != "Ready":
         return False, "Repair must be Ready before delivery"
     qc = RepairQC.query.filter_by(repair_id=repair.id).first()
@@ -249,11 +251,13 @@ def update_repair_status(id):
             flash(reason, "error")
             return redirect(url_for("repair.view_repair", id=id))
     old_status = repair.status
-    if old_status != new_status:
-        repair.status = new_status
-        if new_status == "Delivered" and repair.delivered_at is None:
-            repair.delivered_at = datetime.now(timezone.utc)
-        _audit(repair, "status_changed", old_status, new_status)
+    if old_status == new_status:
+        flash("Repair order is already in this status", "success")
+        return redirect(url_for("repair.view_repair", id=id))
+    repair.status = new_status
+    if new_status == "Delivered" and repair.delivered_at is None:
+        repair.delivered_at = datetime.now(timezone.utc)
+    _audit(repair, "status_changed", old_status, new_status)
     db.session.commit()
     flash("Repair order status updated", "success")
     return redirect(url_for("repair.view_repair", id=id))
