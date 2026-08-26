@@ -4,13 +4,13 @@ from flask import Blueprint, render_template, request
 from sqlalchemy.orm import joinedload
 
 from app.models import RepairOrder
-from app.security import role_required
+from app.security import permission_required
 
 profitability_bp = Blueprint("profitability", __name__, url_prefix="/reports")
 
 
 @profitability_bp.route("/profitability")
-@role_required("admin", "staff")
+@permission_required("reports")
 def profitability():
     query = RepairOrder.query.options(
         joinedload(RepairOrder.customer),
