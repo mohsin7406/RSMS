@@ -65,7 +65,7 @@
                     <span class="text-xs text-slate-500">{{ repair.customer.phone }}</span>
                 </div>
                 <label for="whatsapp-message" class="block text-sm font-medium mb-2">Message to Customer</label>
-                <textarea id="whatsapp-message" rows="5" class="w-full rounded-lg border p-3 bg-transparent text-sm" maxlength="4000">Hi {{ repair.customer.name }}, your FixZone repair {{ repair.job_number }} for {{ repair.device }} is currently {{ repair.status }}.</textarea>
+                <textarea id="whatsapp-message" rows="5" class="w-full rounded-lg border p-3 bg-transparent text-sm" maxlength="4000">{{ whatsapp_message }}</textarea>
                 <div class="flex flex-wrap gap-3 mt-3">
                     <button type="button" id="whatsapp-web-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white font-medium">Send to Customer on WhatsApp</button>
                     <button type="button" id="whatsapp-copy-btn" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700">Copy Message</button>
