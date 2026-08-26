@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.models import RepairOrder, RepairQC
 from app.models.qc import QC_STATUSES
-from app.security import role_required
+from app.security import permission_required
 
 qc_bp = Blueprint("qc", __name__, url_prefix="/qc")
 DEFAULT_CHECKS = (
@@ -79,7 +79,7 @@ def _stage_title(stage):
 
 
 @qc_bp.route("/repair/<int:repair_id>")
-@role_required("admin", "staff", "technician")
+@permission_required("qc")
 def qc_detail(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).first_or_404()
     qc = _ensure_qc(repair)
@@ -91,7 +91,7 @@ def qc_detail(repair_id):
 
 
 @qc_bp.route("/repair/<int:repair_id>", methods=["POST"])
-@role_required("admin", "staff", "technician")
+@permission_required("qc")
 def save_qc(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).first_or_404()
     stage = request.form.get("stage", "before").lower()
@@ -124,12 +124,9 @@ def save_qc(repair_id):
     setattr(qc, photos_field, existing_photos)
 
     if stage == "before":
-        # QC Before is the gate that starts physical repair work. Once it passes
-        # (or is waived), move an approved/parts-waiting job into In Repair.
         if status in {"Passed", "Waived"} and repair.status in {"Approved", "Waiting Parts"}:
             repair.status = "In Repair"
     else:
-        # Keep the legacy/general QC fields synchronized with post-repair QC.
         qc.status = status
         qc.checklist = checklist
         qc.notes = notes
