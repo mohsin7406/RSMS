@@ -1,11 +1,24 @@
+import re
+
 from app.extensions import db
 from app.models import Customer, RepairOrder, RepairQC, User
+
+
+def csrf_token(client):
+    response = client.get("/auth/login")
+    match = re.search(r'name="csrf_token" value="([^"]+)"', response.get_data(as_text=True))
+    assert match
+    return match.group(1)
 
 
 def _login(client, email="admin@example.com", password="AdminPassword123!"):
     return client.post(
         "/auth/login",
-        data={"email": email, "password": password},
+        data={
+            "csrf_token": csrf_token(client),
+            "email": email,
+            "password": password,
+        },
         follow_redirects=False,
     )
 
@@ -28,6 +41,7 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
     response = client.post(
         "/repairs/add",
         data={
+            "csrf_token": csrf_token(client),
             "customer_id": customer_id,
             "device": "iPhone 15 Pro",
             "issue_description": "Broken screen",
@@ -51,8 +65,11 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         repair_id = repair.id
 
     checklist = {f"check_{idx}": "pass" for idx in range(10)}
-    checklist["status"] = "Passed"
-    checklist["notes"] = "All tests passed"
+    checklist.update({
+        "csrf_token": csrf_token(client),
+        "status": "Passed",
+        "notes": "All tests passed",
+    })
     response = client.post(f"/qc/repair/{repair_id}", data=checklist, follow_redirects=False)
     assert response.status_code == 302
 
