@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold">SMS Delivery Logs</h2>
+      <p class="text-sm text-slate-500 mt-1">Recent SMS attempts from RSMS</p>
+    </div>
+    <div class="flex gap-2 text-sm">
+      <a class="px-3 py-2 rounded-lg border" href="{{ url_for('sms_logs.list_logs') }}">All</a>
+      <a class="px-3 py-2 rounded-lg border" href="{{ url_for('sms_logs.list_logs', status='sent') }}">Sent</a>
+      <a class="px-3 py-2 rounded-lg border" href="{{ url_for('sms_logs.list_logs', status='failed') }}">Failed</a>
+      <a class="px-3 py-2 rounded-lg border" href="{{ url_for('sms_logs.list_logs', status='skipped') }}">Skipped</a>
+    </div>
+  </div>
+  <div class="overflow-x-auto bg-white dark:bg-slate-900 border rounded-xl">
+    <table class="min-w-full text-sm">
+      <thead><tr class="border-b text-left"><th class="p-3">Time</th><th class="p-3">Event</th><th class="p-3">Mobile</th><th class="p-3">Status</th><th class="p-3">Provider</th><th class="p-3">Response / Error</th><th class="p-3">Message</th></tr></thead>
+      <tbody>
+      {% for log in logs %}
+        <tr class="border-b align-top">
+          <td class="p-3 whitespace-nowrap">{{ log.created_at }}</td>
+          <td class="p-3">{{ log.event }}</td>
+          <td class="p-3">{{ log.mobile or '-' }}</td>
+          <td class="p-3 font-medium">{{ log.status }}</td>
+          <td class="p-3">{{ log.provider or '-' }}{% if log.provider_status %} ({{ log.provider_status }}){% endif %}</td>
+          <td class="p-3 max-w-sm break-words">{{ log.error or log.provider_response or '-' }}</td>
+          <td class="p-3 max-w-md break-words">{{ log.message }}</td>
+        </tr>
+      {% else %}
+        <tr><td class="p-6 text-slate-500" colspan="7">No SMS logs found</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
