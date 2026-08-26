@@ -7,7 +7,7 @@ from flask import Blueprint, current_app, flash, g, redirect, render_template, r
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
-from app.models import RepairOrder, RepairQC
+from app.models import QCChecklistItem, RepairOrder, RepairQC
 from app.models.qc import QC_STATUSES
 from app.security import permission_required
 
@@ -26,6 +26,14 @@ DEFAULT_CHECKS = (
 )
 MAX_PHOTO_SIZE = 8 * 1024 * 1024
 ALLOWED_PHOTO_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+
+
+def _checks_for_stage(stage):
+    items = QCChecklistItem.query.filter(
+        QCChecklistItem.active.is_(True),
+        QCChecklistItem.stage.in_(["both", stage]),
+    ).order_by(QCChecklistItem.sort_order.asc(), QCChecklistItem.id.asc()).all()
+    return [item.label for item in items] if items else list(DEFAULT_CHECKS)
 
 
 def _ensure_qc(repair):
@@ -101,7 +109,7 @@ def qc_detail(repair_id):
     stage = request.args.get("stage", "before").lower()
     if stage not in {"before", "after"}:
         stage = "before"
-    return render_template("qc/detail.html", repair=repair, qc=qc, checks=DEFAULT_CHECKS, stage=stage)
+    return render_template("qc/detail.html", repair=repair, qc=qc, checks=_checks_for_stage(stage), stage=stage)
 
 
 @qc_bp.route("/repair/<int:repair_id>", methods=["POST"])
@@ -126,10 +134,11 @@ def save_qc(repair_id):
         flash("Invalid QC status", "error")
         return redirect(url_for("qc.qc_detail", repair_id=repair.id, stage=stage))
 
-    checklist = {key: request.form.get(f"check_{idx}", "") for idx, key in enumerate(DEFAULT_CHECKS)}
+    checks = _checks_for_stage(stage)
+    checklist = {key: request.form.get(f"check_{idx}", "") for idx, key in enumerate(checks)}
     notes = request.form.get("notes", "").strip() or None
     if status == "Passed" and any(value not in {"pass", "na"} for value in checklist.values()):
-        flash("Every QC item must pass or be marked N/A before QC can be passed", "error")
+        flash("Every active QC item must pass or be marked N/A before QC can be passed", "error")
         return redirect(url_for("qc.qc_detail", repair_id=repair.id, stage=stage))
 
     status_field, checklist_field, notes_field, tester_field, tested_at_field, photos_field = _stage_fields(stage)
@@ -144,8 +153,6 @@ def save_qc(repair_id):
 
     if repair.service_type == "Doorstep":
         if stage == "before":
-            # The technician repairs the device at the customer's location after
-            # QC Before. Keep the job Approved while the physical work is being done.
             repair.status = "Approved"
         else:
             qc.status = status
