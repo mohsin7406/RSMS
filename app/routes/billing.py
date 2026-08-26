@@ -35,19 +35,13 @@ def _totals(invoice):
     return paid, refunded, net_paid, balance
 
 
-@billing_bp.route("/repair/<int:repair_id>/invoice", methods=["POST"])
-@permission_required("billing")
-def create_invoice(repair_id):
-    repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
+def _create_invoice_for_repair(repair, discount=Decimal("0"), tax=Decimal("0")):
     if repair.invoice:
-        return redirect(url_for("billing.view_invoice", invoice_id=repair.invoice.id))
-
-    discount = _money(request.form.get("discount"))
-    tax = _money(request.form.get("tax"))
+        return repair.invoice
     subtotal = _money(repair.final_amount)
-    discount = min(discount, subtotal)
+    discount = min(_money(discount), subtotal)
+    tax = _money(tax)
     total = subtotal - discount + tax
-
     invoice = Invoice(
         invoice_number=_number("INV", Invoice, "invoice_number"),
         repair_id=repair.id,
@@ -62,8 +56,91 @@ def create_invoice(repair_id):
     )
     repair.final_amount = total
     db.session.add(invoice)
+    db.session.flush()
+    return invoice
+
+
+def _apply_payment(invoice, amount, method, reference=None, notes=None):
+    paid, refunded, net_paid, balance = _totals(invoice)
+    if amount <= 0:
+        return None, "Payment amount must be greater than zero"
+    if amount > balance:
+        return None, "Payment exceeds outstanding balance"
+
+    payment = Payment(
+        payment_number=_number("PAY", Payment, "payment_number"),
+        repair_id=invoice.repair_id,
+        invoice_id=invoice.id,
+        amount=amount,
+        payment_method=method,
+        payment_type="Payment",
+        reference=reference or None,
+        notes=notes or None,
+        received_by_id=g.current_user.id if g.current_user else None,
+    )
+    db.session.add(payment)
+    net_paid += amount
+    outstanding = max(invoice.total - net_paid, Decimal("0"))
+    invoice.status = "Paid" if outstanding == 0 else "Partially Paid"
+    repair = invoice.repair
+    repair.amount_paid = max(net_paid, Decimal("0"))
+    repair.payment_status = "Paid" if outstanding == 0 else "Partially Paid"
+    repair.payment_method = method
+    return payment, None
+
+
+@billing_bp.route("/repair/<int:repair_id>/invoice", methods=["POST"])
+@permission_required("billing")
+def create_invoice(repair_id):
+    repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
+    if repair.invoice:
+        return redirect(url_for("billing.view_invoice", invoice_id=repair.invoice.id))
+
+    invoice = _create_invoice_for_repair(
+        repair,
+        discount=_money(request.form.get("discount")),
+        tax=_money(request.form.get("tax")),
+    )
     db.session.commit()
     flash(f"Invoice {invoice.invoice_number} created", "success")
+    return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
+
+
+@billing_bp.route("/repair/<int:repair_id>/doorstep-payment", methods=["POST"])
+@permission_required("billing")
+def collect_doorstep_payment(repair_id):
+    repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
+    if repair.service_type != "Doorstep":
+        flash("This payment action is only for Doorstep jobs", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+    if repair.status != "Completed":
+        flash("Doorstep job must be Completed after QC After before payment", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+
+    method = request.form.get("payment_method", "")
+    amount = _money(request.form.get("amount"))
+    if method not in PAYMENT_METHODS:
+        flash("Select a valid payment method", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+
+    # The invoice row is created internally in the same transaction so the
+    # payment has a valid accounting parent. To staff, this remains the desired
+    # operational flow: Job Complete -> Collect Payment -> Invoice.
+    invoice = _create_invoice_for_repair(repair)
+    payment, error = _apply_payment(
+        invoice,
+        amount,
+        method,
+        reference=request.form.get("reference", "").strip(),
+        notes="Doorstep payment collected after job completion",
+    )
+    if error:
+        db.session.rollback()
+        flash(error, "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+
+    db.session.commit()
+    flash(f"Payment {payment.payment_number} recorded. Invoice {invoice.invoice_number} generated", "success")
     return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
 
 
