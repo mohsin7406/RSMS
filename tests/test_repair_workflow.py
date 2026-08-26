@@ -11,10 +11,14 @@ def _csrf_token(client):
     return match.group(1)
 
 
-def _login(client, token, email="admin@example.com", password="AdminPassword123!"):
+def _login(client, csrf_token, email="admin@example.com", password="AdminPassword123!"):
     return client.post(
         "/auth/login",
-        data={"csrf_token": token, "email": email, "password": password},
+        data={
+            "csrf_token": csrf_token,
+            "email": email,
+            "password": password,
+        },
         follow_redirects=False,
     )
 
@@ -31,10 +35,11 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         customer_id = customer.id
         technician_id = technician.id
 
-    token = _csrf_token(client)
-    login = _login(client, token)
+    login = _login(client, _csrf_token(client))
     assert login.status_code == 302
 
+    # login clears the session, so obtain a fresh CSRF token after authentication
+    token = _csrf_token(client)
     response = client.post(
         "/repairs/add",
         data={
@@ -61,8 +66,13 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert repair.assigned_technician_id == technician_id
         repair_id = repair.id
 
+    token = _csrf_token(client)
     checklist = {f"check_{idx}": "pass" for idx in range(10)}
-    checklist.update({"csrf_token": token, "status": "Passed", "notes": "All tests passed"})
+    checklist.update({
+        "csrf_token": token,
+        "status": "Passed",
+        "notes": "All tests passed",
+    })
     response = client.post(f"/qc/repair/{repair_id}", data=checklist, follow_redirects=False)
     assert response.status_code == 302
 
