@@ -156,6 +156,8 @@ def list_repairs():
     q = request.args.get("q", "").strip()
     status = request.args.get("status", "")
     query = RepairOrder.query.filter(RepairOrder.deleted_at.is_(None)).join(Customer)
+    if g.current_user and g.current_user.role == "technician":
+        query = query.filter(RepairOrder.assigned_technician_id == g.current_user.id)
     if q:
         query = query.filter(or_(Customer.name.ilike(f"%{q}%"), RepairOrder.job_number.ilike(f"%{q}%"), RepairOrder.device.ilike(f"%{q}%"), RepairOrder.imei.ilike(f"%{q}%")))
     if status:
@@ -247,7 +249,10 @@ def repair_audit(id):
 @login_required
 def repairs_by_customer(customer_id):
     customer = Customer.query.get_or_404(customer_id)
-    repairs = RepairOrder.query.filter_by(customer_id=customer_id).filter(RepairOrder.deleted_at.is_(None)).order_by(RepairOrder.created_at.desc()).all()
+    repairs_query = RepairOrder.query.filter_by(customer_id=customer_id).filter(RepairOrder.deleted_at.is_(None))
+    if g.current_user and g.current_user.role == "technician":
+        repairs_query = repairs_query.filter(RepairOrder.assigned_technician_id == g.current_user.id)
+    repairs = repairs_query.order_by(RepairOrder.created_at.desc()).all()
     return render_template("repairs/customer_repairs.html", customer=customer, repairs=repairs)
 
 
@@ -255,9 +260,12 @@ def repairs_by_customer(customer_id):
 @login_required
 def repairs_by_status(status):
     if status not in REPAIR_STATUSES:
-        flash("Invalid repair status", "error")
+        flash("Invalid status filter", "error")
         return redirect(url_for("repair.list_repairs"))
-    repairs = RepairOrder.query.filter_by(status=status).filter(RepairOrder.deleted_at.is_(None)).order_by(RepairOrder.created_at.desc()).all()
+    query = RepairOrder.query.filter_by(status=status).filter(RepairOrder.deleted_at.is_(None))
+    if g.current_user and g.current_user.role == "technician":
+        query = query.filter(RepairOrder.assigned_technician_id == g.current_user.id)
+    repairs = query.order_by(RepairOrder.created_at.desc()).all()
     return render_template("repairs/status_repairs.html", status=status, repairs=repairs)
 
 
