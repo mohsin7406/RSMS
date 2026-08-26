@@ -29,6 +29,14 @@ REPAIR_TRANSITIONS = {
     "Cancelled": set(),
 }
 
+DOORSTEP_STATUSES = {"Pending", "Approved", "Completed", "Cancelled"}
+DOORSTEP_TRANSITIONS = {
+    "Pending": {"Approved", "Cancelled"},
+    "Approved": {"Cancelled"},
+    "Completed": set(),
+    "Cancelled": set(),
+}
+
 WHATSAPP_WEB_DEFAULT = (
     "Hi {customer_name}, your FixZone repair {job_number} for {device} "
     "is currently {status}."
@@ -85,6 +93,11 @@ def _validate_repair(values):
         return "Customer, device and issue description are required"
     if values["status"] not in REPAIR_STATUSES:
         return "Invalid repair status"
+    if values["service_type"] == "Doorstep":
+        if values["status"] not in DOORSTEP_STATUSES:
+            return "Doorstep jobs use only Pending, Approved, Completed or Cancelled statuses"
+        if values["status"] == "Approved" and not values["assigned_technician_id"]:
+            return "Assign a technician before approving a Doorstep job"
     if values["payment_status"] not in PAYMENT_STATUSES:
         return "Invalid payment status"
     if not db.session.get(Customer, values["customer_id"]):
@@ -258,22 +271,35 @@ def update_repair_status(id):
     if new_status not in REPAIR_STATUSES:
         flash("Invalid repair status", "error")
         return redirect(url_for("repair.view_repair", id=id))
-    if new_status != repair.status and new_status not in REPAIR_TRANSITIONS.get(repair.status, set()):
+
+    if repair.service_type == "Doorstep":
+        if new_status not in DOORSTEP_STATUSES:
+            flash("Doorstep jobs do not use Received, Diagnosing, In Repair, Ready or Delivered statuses", "error")
+            return redirect(url_for("repair.view_repair", id=id))
+        if new_status == "Approved" and not repair.assigned_technician_id:
+            flash("Assign a technician before approving a Doorstep job", "error")
+            return redirect(url_for("repair.view_repair", id=id))
+        if new_status != repair.status and new_status not in DOORSTEP_TRANSITIONS.get(repair.status, set()):
+            flash(f"Invalid Doorstep status transition: {repair.status} → {new_status}", "error")
+            return redirect(url_for("repair.view_repair", id=id))
+    elif new_status != repair.status and new_status not in REPAIR_TRANSITIONS.get(repair.status, set()):
         flash(f"Invalid status transition: {repair.status} → {new_status}", "error")
         return redirect(url_for("repair.view_repair", id=id))
 
     qc = RepairQC.query.filter_by(repair_id=repair.id).first()
-    if new_status == "In Repair" and (qc is None or qc.before_status not in {"Passed", "Waived"}):
-        flash("QC Before Repair must be passed or waived before repair work can start", "error")
-        return redirect(url_for("repair.view_repair", id=id))
-    if new_status == "Ready" and (qc is None or qc.after_status not in {"Passed", "Waived"}):
-        flash("QC After Repair must be passed or waived before the repair can be marked Ready", "error")
-        return redirect(url_for("repair.view_repair", id=id))
-    if new_status == "Delivered":
-        allowed, reason = _delivery_allowed(repair)
-        if not allowed:
-            flash(reason, "error")
+    if repair.service_type != "Doorstep":
+        if new_status == "In Repair" and (qc is None or qc.before_status not in {"Passed", "Waived"}):
+            flash("QC Before Repair must be passed or waived before repair work can start", "error")
             return redirect(url_for("repair.view_repair", id=id))
+        if new_status == "Ready" and (qc is None or qc.after_status not in {"Passed", "Waived"}):
+            flash("QC After Repair must be passed or waived before the repair can be marked Ready", "error")
+            return redirect(url_for("repair.view_repair", id=id))
+        if new_status == "Delivered":
+            allowed, reason = _delivery_allowed(repair)
+            if not allowed:
+                flash(reason, "error")
+                return redirect(url_for("repair.view_repair", id=id))
+
     old_status = repair.status
     if old_status == new_status:
         flash("Repair order is already in this status", "success")
