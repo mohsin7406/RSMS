@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div><h1 class="text-3xl font-bold">Inventory Report</h1><p class="text-slate-500">Stock value, low stock, movements, job purchases and returns.</p></div>
+    <a href="{{ url_for('inventory.list_parts') }}" class="px-4 py-2 border rounded-lg">Back to Inventory</a>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">SKUs</div><div class="text-2xl font-bold">{{ totals.skus }}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Units in Stock</div><div class="text-2xl font-bold">{{ totals.units }}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Stock Cost Value</div><div class="text-2xl font-bold">₹{{ '%.2f'|format(totals.cost_value) }}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Retail Value</div><div class="text-2xl font-bold">₹{{ '%.2f'|format(totals.retail_value) }}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-xs text-slate-500">Low Stock</div><div class="text-2xl font-bold">{{ totals.low_stock }}</div></div>
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-6">
+    <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
+      <h2 class="font-bold text-lg mb-4">Current Inventory</h2>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-slate-500"><th class="pb-2">SKU</th><th>Part</th><th>Qty</th><th>Cost</th><th>Value</th></tr></thead><tbody>{% for part in parts %}<tr class="border-t"><td class="py-2">{{ part.sku }}</td><td>{{ part.name }}</td><td>{{ part.quantity }}</td><td>₹{{ '%.2f'|format(part.cost_price) }}</td><td>₹{{ '%.2f'|format(part.quantity * part.cost_price) }}</td></tr>{% else %}<tr><td colspan="5" class="py-4 text-slate-500">No inventory items.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+
+    <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
+      <h2 class="font-bold text-lg mb-4">Low Stock / Reorder</h2>
+      {% for part in low_stock %}<div class="py-2 border-b last:border-0 flex justify-between"><div><strong>{{ part.name }}</strong><div class="text-xs text-slate-500">{{ part.sku }}</div></div><div class="text-right"><div>{{ part.quantity }} left</div><div class="text-xs text-slate-500">Reorder at {{ part.reorder_level }}</div></div></div>{% else %}<p class="text-slate-500">No low-stock items.</p>{% endfor %}
+    </section>
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-6">
+    <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
+      <div class="flex justify-between mb-4"><h2 class="font-bold text-lg">Job Purchases Still Allocated</h2><span class="text-sm text-slate-500">{{ pending_job_purchases|length }}</span></div>
+      {% for purchase in pending_job_purchases[:50] %}<div class="py-2 border-b last:border-0"><div class="flex justify-between gap-3"><strong>{{ purchase.item_name }}</strong><span>Remaining {{ purchase.remaining_quantity }}</span></div><div class="text-xs text-slate-500">{{ purchase.repair.job_number }} · {{ purchase.supplier or 'No supplier' }} · Net cost ₹{{ '%.2f'|format(purchase.net_cost_total) }}</div></div>{% else %}<p class="text-slate-500">No outstanding job purchases.</p>{% endfor %}
+    </section>
+
+    <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
+      <h2 class="font-bold text-lg mb-1">Purchase Returns</h2><p class="text-sm text-slate-500 mb-4">To inventory: {{ returned_to_inventory }} · To supplier: {{ returned_to_supplier }}</p>
+      {% for row in returns %}<div class="py-2 border-b last:border-0"><div class="flex justify-between gap-3"><strong>{{ row.purchase.item_name }}</strong><span>{{ row.quantity }} → {{ row.destination }}</span></div><div class="text-xs text-slate-500">{{ row.purchase.repair.job_number }} · {{ row.processed_by.email }}{% if row.reason %} · {{ row.reason }}{% endif %}</div></div>{% else %}<p class="text-slate-500">No purchase returns yet.</p>{% endfor %}
+    </section>
+  </div>
+
+  <section class="bg-white dark:bg-slate-900 border rounded-xl p-6">
+    <h2 class="font-bold text-lg mb-4">Recent Stock Movements</h2>
+    <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-slate-500"><th class="pb-2">Date</th><th>Part</th><th>Type</th><th>Qty</th><th>Reference</th><th>Notes</th></tr></thead><tbody>{% for m in movements %}<tr class="border-t"><td class="py-2">{{ m.created_at.strftime('%d %b %Y %I:%M %p') }}</td><td>{{ m.part.name }}</td><td>{{ m.movement_type }}</td><td>{{ m.quantity }}</td><td>{{ m.reference or '-' }}</td><td>{{ m.notes or '-' }}</td></tr>{% else %}<tr><td colspan="6" class="py-4 text-slate-500">No stock movements.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+</div>
+{% endblock %}
