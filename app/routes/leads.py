@@ -40,6 +40,24 @@ def _find_or_create_customer(lead):
     return customer
 
 
+def _staff_users():
+    return User.query.filter(User.role.in_(["admin", "manager", "staff", "reception"])).order_by(User.email.asc()).all()
+
+
+def _apply_lead_form(lead):
+    lead.name = request.form.get("name", "").strip()
+    lead.phone = request.form.get("phone", "").strip()
+    lead.email = request.form.get("email", "").strip() or None
+    lead.device = request.form.get("device", "").strip() or None
+    lead.issue = request.form.get("issue", "").strip() or None
+    lead.source = request.form.get("source", "").strip() or None
+    lead.area = request.form.get("area", "").strip() or None
+    lead.service_type = request.form.get("service_type", "Doorstep")
+    lead.assigned_to_id = request.form.get("assigned_to_id", type=int)
+    lead.notes = request.form.get("notes", "").strip() or None
+    return bool(lead.name and lead.phone)
+
+
 @leads_bp.route("/")
 @permission_required("leads")
 def list_leads():
@@ -57,27 +75,49 @@ def lead_detail(id):
 @leads_bp.route("/add", methods=["GET", "POST"])
 @permission_required("leads")
 def add_lead():
-    staff = User.query.filter(User.role.in_(["admin", "manager", "staff", "reception"])).order_by(User.email.asc()).all()
+    staff = _staff_users()
     if request.method == "POST":
         status = request.form.get("status", "New")
         if status not in LEAD_STATUSES:
             flash("Invalid lead status", "error")
-            return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES)
-        lead = Lead(
-            name=request.form.get("name", "").strip(), phone=request.form.get("phone", "").strip(),
-            email=request.form.get("email", "").strip() or None, device=request.form.get("device", "").strip() or None,
-            issue=request.form.get("issue", "").strip() or None, source=request.form.get("source", "").strip() or None,
-            area=request.form.get("area", "").strip() or None, service_type=request.form.get("service_type", "Doorstep"),
-            status=status, assigned_to_id=request.form.get("assigned_to_id", type=int), notes=request.form.get("notes", "").strip() or None,
-        )
-        if not lead.name or not lead.phone:
+            return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES, action="Add")
+        lead = Lead(status=status)
+        if not _apply_lead_form(lead):
             flash("Name and phone are required", "error")
-            return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES)
+            return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES, action="Add", lead=lead)
         db.session.add(lead)
         db.session.commit()
         flash("Lead created", "success")
         return redirect(url_for("leads.lead_detail", id=lead.id))
-    return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES)
+    return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES, action="Add")
+
+
+@leads_bp.route("/<int:id>/edit", methods=["GET", "POST"])
+@permission_required("leads")
+def edit_lead(id):
+    lead = _get_lead_or_404(id)
+    staff = _staff_users()
+    if request.method == "POST":
+        if not _apply_lead_form(lead):
+            flash("Name and phone are required", "error")
+            return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES, action="Edit", lead=lead)
+        db.session.commit()
+        flash("Lead updated", "success")
+        return redirect(url_for("leads.lead_detail", id=lead.id))
+    return render_template("leads/form.html", staff=staff, statuses=LEAD_STATUSES, action="Edit", lead=lead)
+
+
+@leads_bp.route("/<int:id>/delete", methods=["POST"])
+@permission_required("leads")
+def delete_lead(id):
+    lead = _get_lead_or_404(id)
+    if lead.booking_id:
+        flash("Cannot delete a lead that is linked to a booking. Keep it for history or mark it Lost/Not Interested.", "error")
+        return redirect(url_for("leads.lead_detail", id=lead.id))
+    db.session.delete(lead)
+    db.session.commit()
+    flash("Lead deleted", "success")
+    return redirect(url_for("leads.list_leads"))
 
 
 @leads_bp.route("/<int:id>/contact", methods=["POST"])
