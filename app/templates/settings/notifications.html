@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold">SMS / WhatsApp Settings</h2>
+    <p class="text-sm text-slate-500 mt-1">Configure notification providers and customer message templates.</p>
+  </div>
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for channel, label, setting in [('sms','SMS',sms),('whatsapp','WhatsApp',whatsapp)] %}
+    <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-lg">{{ label }}</h3>
+        <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="{{ channel }}_enabled" {% if setting and setting.enabled %}checked{% endif %}> Enabled</label>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <label class="text-sm">Provider<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_provider" value="{{ setting.provider if setting else '' }}" placeholder="SMSAlert.in"></label>
+        <label class="text-sm">API URL<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_api_url" value="{{ setting.api_url if setting else '' }}" placeholder="https://www.smsalert.co.in/api/push.json"></label>
+        <label class="text-sm">API Key<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" type="password" name="{{ channel }}_api_key" placeholder="Leave blank to keep existing"></label>
+        <label class="text-sm">Sender ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_sender_id" value="{{ setting.sender_id if setting else '' }}"></label>
+        <label class="text-sm">Account ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_account_id" value="{{ setting.account_id if setting else '' }}"></label>
+        <label class="text-sm">Phone Number ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_phone_number_id" value="{{ setting.phone_number_id if setting else '' }}"></label>
+        <label class="text-sm md:col-span-2">Access Token<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" type="password" name="{{ channel }}_access_token" placeholder="Leave blank to keep existing"></label>
+      </div>
+    </section>
+    {% endfor %}
+
+    <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
+      <div>
+        <h3 class="font-semibold text-lg">SMS Message Templates</h3>
+        <p class="text-sm text-slate-500 mt-1">Available variables: <code>{job_number}</code> <code>{device}</code> and <code>{amount}</code> where applicable.</p>
+      </div>
+      {% for event, label in template_events %}
+      {% set template = templates[event] %}
+      <div class="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="font-medium">{{ label }}</label>
+          <label class="text-sm inline-flex items-center gap-2"><input type="checkbox" name="template_{{ event }}_enabled" {% if template is none or template.enabled %}checked{% endif %}> Enabled</label>
+        </div>
+        <textarea name="template_{{ event }}_body" rows="2" maxlength="1000" class="w-full rounded-lg border p-2 bg-transparent">{{ template.body if template else '' }}</textarea>
+      </div>
+      {% endfor %}
+    </section>
+
+    <button class="px-5 py-2.5 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">Save Settings</button>
+  </form>
+
+  <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4">
+    <div>
+      <h3 class="font-semibold text-lg">Send Test SMS</h3>
+      <p class="text-sm text-slate-500 mt-1">Uses the saved SMSAlert.in settings. This sends a real SMS.</p>
+    </div>
+    <form method="post" action="{{ url_for('notifications.test_sms') }}" class="grid md:grid-cols-3 gap-4 items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="text-sm">Mobile Number<input required class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="mobile" placeholder="9876543210"></label>
+      <label class="text-sm">Message<input required maxlength="1000" class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="text" value="RSMS SMS test"></label>
+      <button class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700">Send Test SMS</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
