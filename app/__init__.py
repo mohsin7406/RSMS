@@ -58,8 +58,9 @@ def create_app(config_name=None):
     app.register_blueprint(confirmation_bp)
     app.register_blueprint(customer_status_bp)
 
-    from app.commands import create_admin, seed_db, seed_db_all
+    from app.commands import create_admin, reset_admin_password, seed_db, seed_db_all
     app.cli.add_command(create_admin)
+    app.cli.add_command(reset_admin_password)
     app.cli.add_command(seed_db_all)
     app.cli.add_command(seed_db)
 
