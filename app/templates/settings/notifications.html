@@ -28,19 +28,33 @@
     {% if template_events is defined %}
     <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
       <div>
-        <h3 class="font-semibold text-lg">SMS Notification Templates</h3>
-        <p class="text-sm text-slate-500 mt-1">Edit the messages customers receive. Leave a message blank to keep the built-in default.</p>
-        <p class="text-xs text-slate-500 mt-2">Variables: <code>{job_number}</code> <code>{device}</code> <code>{amount}</code></p>
+        <h3 class="text-xl font-semibold">SMS Notification Templates</h3>
+        <p class="text-sm text-slate-500 mt-1">Edit the messages customers receive. Changes affect future SMS only.</p>
+        <div class="mt-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 p-4 text-sm">
+          <p class="font-medium mb-2">Variables you can use</p>
+          <div class="space-y-1 text-slate-600 dark:text-slate-300">
+            <p><code>{job_number}</code> → repair/job number e.g. <strong>JOB-20260826-0012</strong></p>
+            <p><code>{device}</code> → device being repaired e.g. <strong>iPhone 15 Pro</strong></p>
+            <p><code>{amount}</code> → payment amount for payment SMS e.g. <strong>1000.00</strong></p>
+          </div>
+        </div>
       </div>
       <div class="space-y-4">
         {% for event, label in template_events %}
         {% set template = templates.get(event) %}
-        <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+        <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3" data-template-card>
           <div class="flex items-center justify-between gap-4">
-            <div class="font-medium">{{ label }}</div>
+            <div>
+              <div class="font-medium">{{ label }}</div>
+              <div class="text-xs text-slate-500 mt-0.5">Event: {{ event }}</div>
+            </div>
             <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="template_{{ event }}_enabled" {% if not template or template.enabled %}checked{% endif %}> Enabled</label>
           </div>
-          <textarea name="template_{{ event }}_body" rows="2" maxlength="1000" class="w-full rounded-lg border p-2 bg-transparent" placeholder="Use the default template">{{ template.body if template and template.body else '' }}</textarea>
+          <textarea name="template_{{ event }}_body" rows="3" maxlength="1000" class="w-full rounded-lg border p-2 bg-transparent" placeholder="Use the default template" data-template-input>{{ template.body if template and template.body else '' }}</textarea>
+          <div class="rounded-lg bg-slate-50 dark:bg-slate-800/60 p-3">
+            <div class="text-xs font-medium text-slate-500 mb-1">Live Preview</div>
+            <div class="text-sm whitespace-pre-wrap" data-template-preview></div>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -63,4 +77,27 @@
     </form>
   </section>
 </div>
+<script>
+(function () {
+  const sample = {
+    job_number: 'JOB-20260826-0012',
+    device: 'iPhone 15 Pro',
+    amount: '1000.00'
+  };
+  document.querySelectorAll('[data-template-card]').forEach(card => {
+    const input = card.querySelector('[data-template-input]');
+    const preview = card.querySelector('[data-template-preview]');
+    if (!input || !preview) return;
+    const update = () => {
+      let text = input.value || '';
+      text = text.replaceAll('{job_number}', sample.job_number)
+                 .replaceAll('{device}', sample.device)
+                 .replaceAll('{amount}', sample.amount);
+      preview.textContent = text || 'No custom message — the built-in default template will be used.';
+    };
+    input.addEventListener('input', update);
+    update();
+  });
+})();
+</script>
 {% endblock %}
