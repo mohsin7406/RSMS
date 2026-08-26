@@ -25,8 +25,8 @@ def profitability():
     for repair in query.order_by(RepairOrder.created_at.desc()).all():
         invoice = repair.invoice
         revenue = Decimal(invoice.total if invoice else repair.final_amount or 0)
-        inventory_cost = sum((usage.cost_total for usage in repair.parts_used), Decimal("0"))
-        inventory_revenue = sum((usage.sale_total for usage in repair.parts_used), Decimal("0"))
+        inventory_cost = sum((usage.net_cost_total for usage in repair.parts_used), Decimal("0"))
+        inventory_revenue = sum((usage.net_sale_total for usage in repair.parts_used), Decimal("0"))
         purchase_cost = sum((purchase.net_cost_total for purchase in repair.job_purchases), Decimal("0"))
         purchase_revenue = sum((purchase.net_sale_total for purchase in repair.job_purchases), Decimal("0"))
         parts_cost = inventory_cost + purchase_cost
