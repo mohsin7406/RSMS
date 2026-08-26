@@ -5,7 +5,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for,
 from flask import abort
 
 from app.extensions import db
-from app.models import Invoice, Payment, RepairOrder
+from app.models import Invoice, Payment, RepairExtraCharge, RepairOrder
 from app.models.payment import PAYMENT_METHODS, PAYMENT_TYPES
 from app.security import permission_required, role_required
 
@@ -82,6 +82,38 @@ def create_invoice(repair_id):
     return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
 
 
+@billing_bp.route("/repair/<int:repair_id>/extra-charge", methods=["POST"])
+@role_required("admin", "manager", "staff", "technician")
+def add_extra_charge(repair_id):
+    repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
+    if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
+        return ("Forbidden", 403)
+    if repair.service_type != "Doorstep":
+        flash("Extra charge action is currently available for Doorstep jobs", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+    if repair.invoice:
+        flash("Invoice already exists. Add adjustments from billing instead of changing the job total.", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+
+    amount = _money(request.form.get("amount"))
+    description = request.form.get("description", "").strip()
+    if amount <= 0 or not description:
+        flash("Enter a valid extra charge amount and reason", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
+
+    charge = RepairExtraCharge(
+        repair_id=repair.id,
+        amount=amount,
+        description=description,
+        added_by_id=g.current_user.id,
+    )
+    db.session.add(charge)
+    repair.final_amount = _money(repair.final_amount) + amount
+    db.session.commit()
+    flash(f"Extra charge ₹{amount:.2f} added. New final amount: ₹{repair.final_amount:.2f}", "success")
+    return redirect(url_for("repair.view_repair", id=repair.id))
+
+
 @billing_bp.route("/repair/<int:repair_id>/doorstep-payment", methods=["POST"])
 @role_required("admin", "manager", "staff", "accounts", "technician")
 def collect_doorstep_payment(repair_id):
@@ -101,9 +133,17 @@ def collect_doorstep_payment(repair_id):
         flash("Enter a valid payment amount and method", "error")
         return redirect(url_for("repair.view_repair", id=repair.id))
 
-    outstanding = max(_money(repair.final_amount) - _money(repair.amount_paid), Decimal("0"))
+    final_amount = _money(repair.final_amount)
+    amount_paid = _money(repair.amount_paid)
+    outstanding = max(final_amount - amount_paid, Decimal("0"))
+    if final_amount <= 0:
+        flash("Final repair amount has not been set. Add the job amount or an extra charge before collecting payment.", "error")
+        return redirect(url_for("repair.view_repair", id=repair.id))
     if amount > outstanding:
-        flash("Payment exceeds outstanding amount", "error")
+        flash(
+            f"Payment cannot exceed ₹{outstanding:.2f}. Final Amount: ₹{final_amount:.2f}; Already Paid: ₹{amount_paid:.2f}; Outstanding: ₹{outstanding:.2f}",
+            "error",
+        )
         return redirect(url_for("repair.view_repair", id=repair.id))
 
     payment = Payment(
@@ -118,8 +158,8 @@ def collect_doorstep_payment(repair_id):
         received_by_id=g.current_user.id if g.current_user else None,
     )
     db.session.add(payment)
-    repair.amount_paid = _money(repair.amount_paid) + amount
-    remaining = max(_money(repair.final_amount) - repair.amount_paid, Decimal("0"))
+    repair.amount_paid = amount_paid + amount
+    remaining = max(final_amount - repair.amount_paid, Decimal("0"))
     repair.payment_status = "Paid" if remaining == 0 else "Partially Paid"
     repair.payment_method = method
 
