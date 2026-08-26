@@ -7,6 +7,7 @@ from app.models import Booking, Customer, Lead, Payment, RepairOrder, WarrantyCl
 from app.security import permission_required, role_required
 
 customer_bp = Blueprint("customer", __name__, url_prefix="/customer")
+PER_PAGE=20
 
 def _customer_form_values():
     return {"name":request.form.get("name","").strip(),"email":request.form.get("email","").strip().lower() or None,"phone":request.form.get("phone","").strip()}
@@ -45,7 +46,8 @@ def delete_customer(id):
 
 @customer_bp.route("/view")
 @permission_required("customers")
-def view_customers(): return render_template("customers/list.html",customers=Customer.query.order_by(Customer.created_at.desc()).all())
+def view_customers():
+    page=max(request.args.get("page",1,type=int),1);pagination=Customer.query.order_by(Customer.created_at.desc()).paginate(page=page,per_page=PER_PAGE,error_out=False);return render_template("customers/list.html",customers=pagination.items,pagination=pagination)
 
 @customer_bp.route("/details/<int:id>")
 @permission_required("customers")
