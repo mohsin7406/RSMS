@@ -12,7 +12,7 @@ def _booking_number():
 def _job_number():return format_number("job_prefix","JOB",RepairOrder,"job_number",datetime.now(timezone.utc))
 def _ensure_repair_for_booking(booking):
     if booking.repair_id:return db.session.get(RepairOrder,booking.repair_id),False
-    lead=Lead.query.filter_by(booking_id=booking.id).first();device=lead.device if lead and lead.device else "Booking device";issue=lead.issue if lead and lead.issue else booking.notes or "Issue to be diagnosed";initial="Approved" if booking.service_type=="Doorstep" and (booking.technician_id or not get_bool("require_technician_assignment")) else "Pending";repair=RepairOrder(job_number=_job_number(),customer_id=booking.customer_id,assigned_technician_id=booking.technician_id,device=device,issue_description=issue,service_type=booking.service_type,status=initial,customer_approved=initial=="Approved",warranty_days=get_int("default_warranty_days",0));db.session.add(repair);db.session.flush();booking.repair_id=repair.id;return repair,True
+    lead=Lead.query.filter_by(booking_id=booking.id).first();device=lead.device if lead and lead.device else "Booking device";issue=lead.issue if lead and lead.issue else booking.notes or "Issue to be diagnosed";initial="Approved" if booking.service_type=="Doorstep" and booking.technician_id else "Pending";repair=RepairOrder(job_number=_job_number(),customer_id=booking.customer_id,assigned_technician_id=booking.technician_id,device=device,issue_description=issue,service_type=booking.service_type,status=initial,customer_approved=initial=="Approved",warranty_days=get_int("default_warranty_days",0));db.session.add(repair);db.session.flush();booking.repair_id=repair.id;return repair,True
 def _form_context():return {"technicians":User.query.filter_by(role="technician").order_by(User.email).all(),"customers":Customer.query.order_by(Customer.name).all()}
 def _apply_booking_form(booking):
     try:booking.scheduled_at=datetime.fromisoformat(request.form.get("scheduled_at",""))
@@ -48,7 +48,10 @@ def edit_booking(id):
         if error:flash(error,"error");return render_template("bookings/form.html",action="Edit",booking=booking,**context)
         if booking.repair_id:
             repair=db.session.get(RepairOrder,booking.repair_id)
-            if repair:repair.assigned_technician_id=booking.technician_id;repair.service_type=booking.service_type;repair.customer_id=booking.customer_id
+            if repair:
+                repair.assigned_technician_id=booking.technician_id;repair.service_type=booking.service_type;repair.customer_id=booking.customer_id
+                if repair.service_type=="Doorstep" and repair.status=="Pending" and booking.technician_id:
+                    repair.status="Approved";repair.customer_approved=True
         db.session.commit();flash("Booking updated","success");return redirect(url_for("bookings.list_bookings"))
     return render_template("bookings/form.html",action="Edit",booking=booking,**context)
 @bookings_bp.route("/<int:id>/delete",methods=["POST"])
@@ -71,10 +74,12 @@ def update_status(id):
         if not has_permission(g.current_user.role,"bookings"):abort(403)
     status=request.form.get("status","")
     if status not in BOOKING_STATUSES:flash("Invalid booking status","error");return redirect(url_for("bookings.list_bookings"))
-    if status=="Confirmed" and booking.service_type=="Doorstep" and get_bool("require_technician_assignment") and not booking.technician_id:flash("Assign a technician before confirming this Doorstep booking.","error");return redirect(url_for("bookings.list_bookings"))
     booking.status=status;repair=None;created=False
     if status in {"Confirmed","Started","Completed"}:repair,created=_ensure_repair_for_booking(booking)
     db.session.commit()
-    if created and repair is not None:flash(f"Booking confirmed. Linked repair {repair.job_number}"+(" is Approved and ready for QC Before" if repair.service_type=="Doorstep" and repair.status=="Approved" and get_bool("require_qc_before") else ""),"success")
+    if created and repair is not None:
+        if repair.service_type=="Doorstep" and repair.status=="Approved":flash(f"Booking confirmed. Doorstep job {repair.job_number} is Approved and ready for QC Before","success")
+        elif repair.service_type=="Doorstep" and repair.status=="Pending" and get_bool("require_technician_assignment"):flash(f"Booking confirmed and repair {repair.job_number} created as Pending. Assign a technician to approve the Doorstep job.","success")
+        else:flash(f"Booking confirmed. Linked repair {repair.job_number}","success")
     else:flash("Booking status updated","success")
     return redirect(url_for("bookings.list_bookings"))
