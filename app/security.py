@@ -18,6 +18,7 @@ def get_csrf_token() -> str:
 
 def validate_csrf() -> None:
     if request.method not in {"POST","PUT","PATCH","DELETE"}: return
+    if request.endpoint in {"lead_webhook.elementor"}: return
     supplied=request.form.get("csrf_token") or request.headers.get("X-CSRFToken"); expected=session.get(CSRF_SESSION_KEY)
     if not supplied or not expected or not compare_digest(supplied,expected): abort(400,description="Invalid or missing CSRF token.")
 
@@ -63,7 +64,7 @@ def register_security(app):
             maintenance=get_bool("maintenance_mode",False)
         except Exception:
             maintenance=False
-        if maintenance and not (g.current_user and g.current_user.role=="admin"):
+        if maintenance and not (g.current_user and g.current_user.role=="admin") and request.endpoint!="lead_webhook.elementor":
             return render_template("errors/503.html"),503
         validate_csrf()
     @app.context_processor
