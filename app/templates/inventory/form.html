@@ -1,15 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
-  <div><h1 class="text-2xl font-bold">Add Part</h1><p class="text-slate-500">Create an inventory item and optional opening stock.</p></div>
+  <div><a href="{{ url_for('inventory.list_parts') }}" class="text-sm text-slate-500 hover:text-blue-600">← Back to Inventory</a><h1 class="text-2xl font-bold mt-2">{{ 'Edit Part' if part else 'Add Part' }}</h1><p class="text-slate-500">{{ 'Update part details and pricing. Stock quantity is changed separately so every movement stays auditable.' if part else 'Create an inventory item and optional opening stock.' }}</p></div>
   <form method="post" class="bg-white dark:bg-slate-900 p-6 rounded-xl border space-y-5">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid md:grid-cols-2 gap-4">
-      {% for name,label,required in [('sku','SKU',True),('name','Part name',True),('brand','Brand',False),('model','Model',False),('category','Category',False),('supplier','Supplier',False),('quantity','Opening quantity',False),('reorder_level','Reorder level',False),('cost_price','Cost price',False),('selling_price','Selling price',False)] %}
-      <label class="block"><span class="text-sm font-medium">{{ label }}</span><input name="{{ name }}" {% if required %}required{% endif %} type="{% if name in ['quantity','reorder_level','cost_price','selling_price'] %}number{% else %}text{% endif %}" {% if name in ['quantity','reorder_level','cost_price','selling_price'] %}step="0.01" min="0"{% endif %} class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
+      {% for name,label,required in [('sku','SKU',True),('name','Part name',True),('brand','Brand',False),('model','Model',False),('category','Category',False),('supplier','Supplier',False),('reorder_level','Reorder level',False),('cost_price','Cost price',False),('selling_price','Selling price',False)] %}
+      <label class="block"><span class="text-sm font-medium">{{ label }}</span><input name="{{ name }}" value="{{ (part|attr(name)) if part and (part|attr(name)) is not none else '' }}" {% if required %}required{% endif %} type="{% if name in ['reorder_level','cost_price','selling_price'] %}number{% else %}text{% endif %}" {% if name in ['reorder_level','cost_price','selling_price'] %}step="0.01" min="0"{% endif %} class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
       {% endfor %}
+      {% if not part %}<label class="block"><span class="text-sm font-medium">Opening quantity</span><input name="quantity" type="number" step="0.01" min="0" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>{% endif %}
     </div>
-    <button class="px-4 py-2 bg-blue-600 text-white rounded-lg">Save Part</button>
+    {% if part %}<div class="rounded-lg bg-slate-50 dark:bg-slate-800 p-3 text-sm">Current stock: <strong>{{ part.quantity }}</strong>. Use Stock Adjustment on the Inventory page to change quantity.</div>{% endif %}
+    <button class="px-4 py-2 bg-blue-600 text-white rounded-lg">{{ 'Save Changes' if part else 'Save Part' }}</button>
   </form>
 </div>
 {% endblock %}
