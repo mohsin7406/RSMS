@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-xl"><h2 class="text-2xl font-bold mb-6">{{ action }} User</h2><form method="post" class="space-y-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800"><div><label class="block text-sm mb-1">Email</label><input type="email" name="email" required class="w-full rounded-lg border p-2 bg-transparent"></div><div><label class="block text-sm mb-1">Password</label><input type="password" name="password" minlength="12" required class="w-full rounded-lg border p-2 bg-transparent"></div><div><label class="block text-sm mb-1">Role</label><select name="role" class="w-full rounded-lg border p-2 bg-transparent"><option>staff</option><option>technician</option><option>customer</option><option>admin</option></select></div><button class="px-4 py-2 rounded-lg bg-slate-900 text-white">Create User</button></form></div>
+{% endblock %}
