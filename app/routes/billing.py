@@ -108,7 +108,14 @@ def add_extra_charge(repair_id):
         added_by_id=g.current_user.id,
     )
     db.session.add(charge)
-    repair.final_amount = _money(repair.final_amount) + amount
+
+    # A Doorstep booking may arrive with an estimate but no explicit final amount.
+    # Extra charges must increase the job price; they must never replace the estimate.
+    current_final = _money(repair.final_amount)
+    estimate = _money(repair.estimated_amount)
+    base_amount = max(current_final, estimate)
+    repair.final_amount = base_amount + amount
+
     db.session.commit()
     flash(f"Extra charge ₹{amount:.2f} added. New final amount: ₹{repair.final_amount:.2f}", "success")
     return redirect(url_for("repair.view_repair", id=repair.id))
