@@ -2,17 +2,22 @@
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-6">
   <div class="flex items-center justify-between">
-    <div><h1 class="text-3xl font-bold">Leads</h1><p class="text-slate-500 mt-1">Manage enquiries and follow-ups.</p></div>
+    <div><h1 class="text-3xl font-bold">Leads</h1><p class="text-slate-500 mt-1">Manage enquiries, repeated follow-ups and booking conversion.</p></div>
     <a href="{{ url_for('leads.add_lead') }}" class="px-4 py-2 bg-blue-600 text-white rounded-lg">New Lead</a>
   </div>
   <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
     <div class="overflow-x-auto"><table class="w-full text-sm text-left">
-      <thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Name</th><th class="px-4 py-3">Phone</th><th class="px-4 py-3">Device</th><th class="px-4 py-3">Area</th><th class="px-4 py-3">Service</th><th class="px-4 py-3">Status</th></tr></thead>
+      <thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Lead</th><th class="px-4 py-3">Phone</th><th class="px-4 py-3">Device</th><th class="px-4 py-3">Contacted</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Action</th></tr></thead>
       <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
       {% for lead in leads %}
-      <tr><td class="px-4 py-3 font-medium">{{ lead.name }}</td><td class="px-4 py-3">{{ lead.phone }}<div><a href="https://wa.me/{{ ('91' ~ lead.phone|string|replace(' ','')|replace('-','')) if (lead.phone|string|replace(' ','')|replace('-',''))|length == 10 else (lead.phone|string|replace(' ','')|replace('-','')) }}?text={{ ('Hi ' ~ lead.name ~ ', this is FixZone. We received your enquiry for ' ~ (lead.device or 'your device') ~ '.')|urlencode }}" target="_blank" rel="noopener noreferrer" class="text-green-600 text-xs">Send on WhatsApp</a></div></td><td class="px-4 py-3">{{ lead.device or '-' }}</td><td class="px-4 py-3">{{ lead.area or '-' }}</td><td class="px-4 py-3">{{ lead.service_type }}</td><td class="px-4 py-3">
-        <form method="post" action="{{ url_for('leads.update_status', id=lead.id) }}" class="flex gap-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><select name="status" class="rounded border px-2 py-1 dark:bg-slate-800">{% for status in statuses %}<option value="{{ status }}" {% if lead.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select><button class="px-2 py-1 bg-slate-800 text-white rounded">Save</button></form>
-      </td></tr>
+      <tr>
+        <td class="px-4 py-3"><div class="font-medium">{{ lead.name }}</div><div class="text-xs text-slate-500">{{ lead.area or '-' }} · {{ lead.service_type }}</div></td>
+        <td class="px-4 py-3">{{ lead.phone }}<div><a href="https://wa.me/{{ ('91' ~ lead.phone|string|replace(' ','')|replace('-','')) if (lead.phone|string|replace(' ','')|replace('-',''))|length == 10 else (lead.phone|string|replace(' ','')|replace('-','')) }}?text={{ ('Hi ' ~ lead.name ~ ', this is FixZone. We received your enquiry for ' ~ (lead.device or 'your device') ~ '.')|urlencode }}" target="_blank" rel="noopener noreferrer" class="text-green-600 text-xs">WhatsApp</a></div></td>
+        <td class="px-4 py-3">{{ lead.device or '-' }}</td>
+        <td class="px-4 py-3"><div class="font-medium">{{ lead.contacts|length }} time(s)</div>{% if lead.contacts %}<div class="text-xs text-slate-500">Last: {{ lead.contacts[0].contacted_at.strftime('%d %b %H:%M') }}</div>{% else %}<div class="text-xs text-slate-500">Never</div>{% endif %}</td>
+        <td class="px-4 py-3"><span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{{ lead.status }}</span>{% if lead.booking %}<div class="text-xs text-green-600 mt-1">{{ lead.booking.booking_number }}</div>{% endif %}</td>
+        <td class="px-4 py-3"><a href="{{ url_for('leads.lead_detail', id=lead.id) }}" class="px-3 py-2 bg-slate-800 text-white rounded">Open / Follow Up</a></td>
+      </tr>
       {% else %}<tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">No leads yet.</td></tr>{% endfor %}
       </tbody>
     </table></div>
