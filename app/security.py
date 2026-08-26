@@ -56,7 +56,16 @@ def permission_required(permission):
 
 def register_security(app):
     @app.before_request
-    def _security_before_request(): load_current_user(); validate_csrf()
+    def _security_before_request():
+        load_current_user()
+        try:
+            from app.services.settings import get_bool
+            maintenance=get_bool("maintenance_mode",False)
+        except Exception:
+            maintenance=False
+        if maintenance and not (g.current_user and g.current_user.role=="admin"):
+            return render_template("errors/503.html"),503
+        validate_csrf()
     @app.context_processor
     def _security_context(): return {"csrf_token":get_csrf_token,"current_user":g.current_user,"has_permission":lambda permission:bool(g.current_user and has_permission(g.current_user.role,permission))}
     @app.after_request
@@ -66,7 +75,7 @@ def register_security(app):
         if not response.headers.get("Content-Security-Policy"):
             response.headers["Content-Security-Policy"]="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
         if current_app.config.get("SESSION_COOKIE_SECURE"): response.headers.setdefault("Strict-Transport-Security","max-age=31536000; includeSubDomains")
-        if request.endpoint and request.endpoint.startswith(("auth.","users.","billing.","system_settings.")): response.headers.setdefault("Cache-Control","no-store")
+        if request.endpoint and request.endpoint.startswith(("auth.","users.","billing.","system_settings.","system_update.")): response.headers.setdefault("Cache-Control","no-store")
         return response
     @app.errorhandler(400)
     def bad_request(error): return render_template("errors/400.html",error=error),400
