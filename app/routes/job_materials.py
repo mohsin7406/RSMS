@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
 from app.extensions import db
-from app.models import JobPurchase, JobPurchaseReturn, Part, PartUsage, RepairOrder, StockMovement
+from app.models import JobPurchase, JobPurchaseReturn, Part, PartUsage, PartUsageReturn, RepairOrder, StockMovement
 from app.security import current_user_id, role_required
 
 materials_bp = Blueprint("materials", __name__, url_prefix="/materials")
@@ -35,8 +35,8 @@ def repair_materials(repair_id):
         return ("Forbidden", 403)
     parts = Part.query.filter(Part.active.is_(True)).order_by(Part.name.asc()).all()
     available_parts = [part for part in parts if part.quantity > 0]
-    inventory_cost = sum((usage.cost_total for usage in repair.parts_used), Decimal("0"))
-    inventory_sale = sum((usage.sale_total for usage in repair.parts_used), Decimal("0"))
+    inventory_cost = sum((usage.net_cost_total for usage in repair.parts_used), Decimal("0"))
+    inventory_sale = sum((usage.net_sale_total for usage in repair.parts_used), Decimal("0"))
     purchase_cost = sum((purchase.net_cost_total for purchase in repair.job_purchases), Decimal("0"))
     purchase_sale = sum((purchase.net_sale_total for purchase in repair.job_purchases), Decimal("0"))
     return render_template(
@@ -77,6 +77,39 @@ def add_inventory_part(repair_id):
     db.session.commit()
     flash(f"{part.name} added from inventory", "success")
     return redirect(url_for("materials.repair_materials", repair_id=repair_id))
+
+
+@materials_bp.route("/usage/<int:usage_id>/return", methods=["POST"])
+@role_required("admin", "manager")
+def return_inventory_usage(usage_id):
+    usage = db.session.get(PartUsage, usage_id)
+    if usage is None:
+        from flask import abort
+        abort(404)
+    quantity = _money(request.form.get("quantity"))
+    reason = request.form.get("reason", "").strip() or None
+    if quantity <= 0 or quantity > usage.remaining_quantity:
+        flash(f"Return quantity must be between 0 and {usage.remaining_quantity}", "error")
+        return redirect(url_for("materials.repair_materials", repair_id=usage.repair_id))
+
+    usage.part.quantity += quantity
+    db.session.add(PartUsageReturn(
+        usage_id=usage.id,
+        quantity=quantity,
+        reason=reason,
+        processed_by_id=current_user_id(),
+    ))
+    db.session.add(StockMovement(
+        part_id=usage.part_id,
+        user_id=current_user_id(),
+        movement_type="IN",
+        quantity=quantity,
+        reference=usage.repair.job_number,
+        notes="Unused repair inventory part returned to stock" + (f": {reason}" if reason else ""),
+    ))
+    db.session.commit()
+    flash(f"Returned {quantity} × {usage.part.name} to inventory", "success")
+    return redirect(url_for("materials.repair_materials", repair_id=usage.repair_id))
 
 
 @materials_bp.route("/repair/<int:repair_id>/purchase", methods=["POST"])
