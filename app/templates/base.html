@@ -31,7 +31,7 @@
             {% if current_user and current_user.role == 'admin' %}
             <div class="pt-4 pb-1 px-3 text-xs uppercase tracking-wider text-slate-500">Administration</div>
             <a href="{{ url_for('users.list_users') }}" class="block px-3 py-2.5 rounded-lg">Users & Roles</a>
-            <a href="#" class="block px-3 py-2.5 rounded-lg text-slate-500 cursor-not-allowed" title="Notification settings coming next">SMS / WhatsApp Settings</a>
+            <a href="{{ url_for('notifications.settings') }}" class="block px-3 py-2.5 rounded-lg">SMS / WhatsApp Settings</a>
             <a href="#" class="block px-3 py-2.5 rounded-lg text-slate-500 cursor-not-allowed" title="System settings coming next">System Settings</a>
             {% endif %}
         </nav>
