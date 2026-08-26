@@ -14,8 +14,8 @@
         <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="{{ channel }}_enabled" {% if setting and setting.enabled %}checked{% endif %}> Enabled</label>
       </div>
       <div class="grid md:grid-cols-2 gap-4">
-        <label class="text-sm">Provider<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_provider" value="{{ setting.provider if setting else '' }}" placeholder="e.g. Twilio / MSG91 / Meta"></label>
-        <label class="text-sm">API URL<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_api_url" value="{{ setting.api_url if setting else '' }}"></label>
+        <label class="text-sm">Provider<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_provider" value="{{ setting.provider if setting else '' }}" placeholder="SMSAlert.in"></label>
+        <label class="text-sm">API URL<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_api_url" value="{{ setting.api_url if setting else '' }}" placeholder="https://www.smsalert.co.in/api/push.json"></label>
         <label class="text-sm">API Key<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" type="password" name="{{ channel }}_api_key" placeholder="Leave blank to keep existing"></label>
         <label class="text-sm">Sender ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_sender_id" value="{{ setting.sender_id if setting else '' }}"></label>
         <label class="text-sm">Account ID<input class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="{{ channel }}_account_id" value="{{ setting.account_id if setting else '' }}"></label>
@@ -26,5 +26,18 @@
     {% endfor %}
     <button class="px-5 py-2.5 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">Save Settings</button>
   </form>
+
+  <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4">
+    <div>
+      <h3 class="font-semibold text-lg">Send Test SMS</h3>
+      <p class="text-sm text-slate-500 mt-1">Uses the saved SMSAlert.in settings. This sends a real SMS.</p>
+    </div>
+    <form method="post" action="{{ url_for('notifications.test_sms') }}" class="grid md:grid-cols-3 gap-4 items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="text-sm">Mobile Number<input required class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="mobile" placeholder="9876543210"></label>
+      <label class="text-sm">Message<input required maxlength="1000" class="mt-1 w-full rounded-lg border p-2 bg-transparent" name="text" value="RSMS SMS test"></label>
+      <button class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700">Send Test SMS</button>
+    </form>
+  </section>
 </div>
 {% endblock %}
