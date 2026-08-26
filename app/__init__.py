@@ -43,6 +43,8 @@ def create_app(config_name=None):
     from app.routes.lead_webhook_settings import lead_webhook_settings_bp
     from app.services import notification_hooks  # noqa:F401
     for bp in [main_bp,auth_bp,customer_bp,repair_bp,inventory_bp,billing_bp,qc_bp,warranty_bp,profitability_bp,leads_bp,bookings_bp,conversion_bp,technician_bp,confirmation_bp,customer_status_bp,users_bp,notifications_bp,sms_logs_bp,materials_bp,purchases_bp,ops_bp,settings_bp,system_update_bp,lead_webhook_bp,lead_webhook_settings_bp]: app.register_blueprint(bp)
+    from app.pagination_overrides import register_pagination_overrides
+    register_pagination_overrides(app)
     from app.services.settings import get_setting,get_bool,get_options
     from app.services.system_updater import current_version
     @app.context_processor
