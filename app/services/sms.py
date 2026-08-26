@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from app.models.notification_setting import NotificationSetting
+from app.models.notification_template import NotificationTemplate
 
 
 EVENT_TEMPLATES = {
@@ -66,9 +67,20 @@ def send_sms(mobile, text, *, timeout=10):
 
 
 def notify_customer(event, repair, **values):
-    template = EVENT_TEMPLATES.get(event)
-    if not template or not getattr(repair, "customer", None):
-        return {"ok": False, "skipped": True, "reason": "No template/customer"}
+    if not getattr(repair, "customer", None):
+        return {"ok": False, "skipped": True, "reason": "No customer"}
+
+    template = NotificationTemplate.query.filter_by(channel="sms", event=event).first()
+    if template is not None:
+        if not template.enabled:
+            return {"ok": False, "skipped": True, "reason": "Notification template disabled"}
+        text_template = template.body
+    else:
+        text_template = EVENT_TEMPLATES.get(event)
+
+    if not text_template:
+        return {"ok": False, "skipped": True, "reason": "No template"}
+
     phone = getattr(repair.customer, "phone", None)
-    text = template.format(job_number=repair.job_number, device=repair.device, **values)
+    text = text_template.format(job_number=repair.job_number, device=repair.device, **values)
     return send_sms(phone, text)
