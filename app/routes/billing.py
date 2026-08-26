@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import abort
 
 from app.extensions import db
 from app.models import Invoice, Payment, RepairOrder
@@ -69,7 +70,9 @@ def create_invoice(repair_id):
 @billing_bp.route("/invoice/<int:invoice_id>")
 @role_required("admin", "staff", "technician")
 def view_invoice(invoice_id):
-    invoice = Invoice.query.get_or_404(invoice_id)
+    invoice = db.session.get(Invoice, invoice_id)
+    if invoice is None:
+        abort(404)
     paid, refunded, net_paid, balance = _totals(invoice)
     return render_template("billing/invoice.html", invoice=invoice, paid=paid, refunded=refunded, net_paid=net_paid, balance=balance)
 
