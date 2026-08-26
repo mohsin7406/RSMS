@@ -59,14 +59,15 @@
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                 <div class="flex items-center justify-between mb-4">
                     <div>
-                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">WhatsApp Web</h3>
-                        <p class="text-xs text-slate-500 mt-1">Opens your existing WhatsApp Web/app with the message pre-filled.</p>
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">WhatsApp Web — Message Customer</h3>
+                        <p class="text-xs text-slate-500 mt-1">Edit the message below, then click <strong>Send to Customer</strong> to open the customer’s WhatsApp chat with the message pre-filled.</p>
                     </div>
                     <span class="text-xs text-slate-500">{{ repair.customer.phone }}</span>
                 </div>
-                <textarea id="whatsapp-message" rows="4" class="w-full rounded-lg border p-3 bg-transparent text-sm" maxlength="4000">Hi {{ repair.customer.name }}, your FixZone repair {{ repair.job_number }} for {{ repair.device }} is currently {{ repair.status }}.</textarea>
+                <label for="whatsapp-message" class="block text-sm font-medium mb-2">Message to Customer</label>
+                <textarea id="whatsapp-message" rows="5" class="w-full rounded-lg border p-3 bg-transparent text-sm" maxlength="4000">Hi {{ repair.customer.name }}, your FixZone repair {{ repair.job_number }} for {{ repair.device }} is currently {{ repair.status }}.</textarea>
                 <div class="flex flex-wrap gap-3 mt-3">
-                    <button type="button" id="whatsapp-web-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white font-medium">Open WhatsApp</button>
+                    <button type="button" id="whatsapp-web-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white font-medium">Send to Customer on WhatsApp</button>
                     <button type="button" id="whatsapp-copy-btn" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700">Copy Message</button>
                 </div>
                 <p id="whatsapp-hint" class="text-xs text-slate-500 mt-2"></p>
@@ -90,35 +91,25 @@
 </div>
 <script>
 (function () {
-    const rawPhone = {{ (repair.customer.phone or '')|tojson }};
-    const phone = rawPhone.replace(/\D/g, '');
+    const phone = {{ (repair.customer.phone or '')|tojson }}.replace(/\D/g, '');
     const message = document.getElementById('whatsapp-message');
     const openButton = document.getElementById('whatsapp-web-btn');
     const copyButton = document.getElementById('whatsapp-copy-btn');
     const hint = document.getElementById('whatsapp-hint');
 
-    function normalizeIndianMobile(value) {
-        let digits = String(value || '').replace(/\D/g, '');
-        if (digits.startsWith('0091') && digits.length === 14) digits = digits.slice(2);
-        if (digits.startsWith('91') && digits.length === 12) return digits;
-        if (digits.length === 10) return '91' + digits;
-        return null;
-    }
-
     function buildWhatsAppUrl() {
-        const normalized = normalizeIndianMobile(phone);
+        let normalized = phone;
+        if (normalized.length === 10) normalized = '91' + normalized;
         if (!normalized) return null;
         return 'https://wa.me/' + normalized + '?text=' + encodeURIComponent(message.value);
     }
 
     openButton?.addEventListener('click', function () {
-        const normalized = normalizeIndianMobile(phone);
         const url = buildWhatsAppUrl();
         if (!url) {
-            hint.textContent = 'Invalid Indian mobile number. Enter a 10-digit number or a number beginning with 91.';
+            hint.textContent = 'Customer does not have a valid phone number.';
             return;
         }
-        hint.textContent = 'Opening WhatsApp for +91 ' + normalized.slice(2) + '...';
         window.open(url, '_blank', 'noopener,noreferrer');
     });
 
