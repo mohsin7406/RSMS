@@ -8,28 +8,34 @@
             <p class="text-slate-500 mt-1">Created on {{ repair.created_at.strftime('%B %d, %Y') }} · {{ repair.service_type }}</p>
         </div>
         <div class="flex gap-3 flex-wrap justify-end">
-            {% if repair.invoice %}
-                <a href="{{ url_for('billing.view_invoice', invoice_id=repair.invoice.id) }}" class="px-4 py-2 bg-green-600 text-white rounded-lg">View Invoice</a>
-            {% elif repair.service_type != 'Doorstep' %}
-                <form method="post" action="{{ url_for('billing.create_invoice', repair_id=repair.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="px-4 py-2 bg-green-600 text-white rounded-lg">Create Invoice</button>
-                </form>
+            {% if has_permission('billing') %}
+                {% if repair.invoice %}
+                    <a href="{{ url_for('billing.view_invoice', invoice_id=repair.invoice.id) }}" class="px-4 py-2 bg-green-600 text-white rounded-lg">View Invoice</a>
+                {% elif repair.service_type != 'Doorstep' or repair.status == 'Completed' %}
+                    <form method="post" action="{{ url_for('billing.create_invoice', repair_id=repair.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="px-4 py-2 bg-green-600 text-white rounded-lg">Create Invoice</button>
+                    </form>
+                {% endif %}
             {% endif %}
             <a href="{{ url_for('qc.qc_detail', repair_id=repair.id, stage='before') }}" class="px-4 py-2 bg-amber-600 text-white rounded-lg">QC Before</a>
             <a href="{{ url_for('qc.qc_detail', repair_id=repair.id, stage='after') }}" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">QC After</a>
-            <a href="{{ url_for('repair.edit_repair', id=repair.id) }}" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">Edit</a>
-            <form action="{{ url_for('repair.delete_repair', id=repair.id) }}" method="POST" onsubmit="return confirm('Delete this repair order?');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg">Delete</button>
-            </form>
+            {% if current_user and current_user.role in ['admin','staff'] %}
+                <a href="{{ url_for('repair.edit_repair', id=repair.id) }}" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">Edit</a>
+            {% endif %}
+            {% if current_user and current_user.role == 'admin' %}
+                <form action="{{ url_for('repair.delete_repair', id=repair.id) }}" method="POST" onsubmit="return confirm('Delete this repair order?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg">Delete</button>
+                </form>
+            {% endif %}
         </div>
     </div>
 
     {% if repair.service_type == 'Doorstep' %}
     <div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-5">
         <h2 class="font-bold text-blue-900 dark:text-blue-200">Doorstep Workflow</h2>
-        <p class="text-sm text-blue-800 dark:text-blue-300 mt-1">Technician Assigned → Approved → QC Before → Repair at Customer Location → QC After → Job Complete → Payment → Invoice</p>
+        <p class="text-sm text-blue-800 dark:text-blue-300 mt-1">Technician Assigned → Approved → QC Before → Repair at Customer Location → QC After → Job Complete → Payment → Invoice by Admin/Accounts</p>
     </div>
     {% endif %}
 
@@ -100,7 +106,8 @@
                     <label class="block text-xs text-slate-500">Reference
                         <input name="reference" class="mt-1 w-full rounded border p-2 bg-transparent text-sm" placeholder="UPI ref / transaction ID">
                     </label>
-                    <button class="w-full bg-green-600 text-white py-2 rounded text-sm font-medium">Collect Payment & Generate Invoice</button>
+                    <button class="w-full bg-green-600 text-white py-2 rounded text-sm font-medium">Record Payment</button>
+                    {% if current_user and current_user.role == 'technician' %}<p class="text-xs text-slate-500">Invoice will be generated later by Admin/Accounts.</p>{% endif %}
                 </form>
                 {% elif repair.service_type == 'Doorstep' and repair.status != 'Completed' %}
                     <p class="mt-4 text-xs text-slate-500 border-t pt-3">Payment becomes available after QC After marks the job Complete.</p>
@@ -108,6 +115,7 @@
             </div>
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                 <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Workflow</h3>
+                {% if current_user and current_user.role != 'technician' %}
                 <form method="post" action="{{ url_for('repair.update_repair_status', id=repair.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="space-y-3">
@@ -123,9 +131,12 @@
                         <button class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium">Update Status</button>
                     </div>
                 </form>
-                {% if repair.service_type == 'Doorstep' and repair.status == 'Approved' %}<p class="mt-3 text-xs text-slate-500">Use QC Before, perform the repair, then QC After. Passing QC After completes the job automatically.</p>{% endif %}
+                {% else %}
+                    <div class="flex items-center justify-between"><span class="text-sm">Current:</span><span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">{{ repair.status }}</span></div>
+                    <p class="mt-3 text-xs text-slate-500">Use QC Before and QC After to progress Doorstep jobs. Status changes are controlled by the workflow.</p>
+                {% endif %}
             </div>
-            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800"><h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3><p class="font-medium">{{ repair.customer.name }}</p><p class="text-sm text-slate-500 mt-1">{{ repair.customer.phone }}</p><a href="{{ url_for('repair.repairs_by_customer', customer_id=repair.customer.id) }}" class="text-xs text-blue-500 hover:underline">View History</a></div>
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800"><h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3><p class="font-medium">{{ repair.customer.name }}</p><p class="text-sm text-slate-500 mt-1">{{ repair.customer.phone }}</p></div>
         </div>
     </div>
 </div>
@@ -136,31 +147,9 @@
     const openButton = document.getElementById('whatsapp-web-btn');
     const copyButton = document.getElementById('whatsapp-copy-btn');
     const hint = document.getElementById('whatsapp-hint');
-
-    function buildWhatsAppUrl() {
-        let normalized = phone;
-        if (normalized.length === 10) normalized = '91' + normalized;
-        if (!normalized) return null;
-        return 'https://wa.me/' + normalized + '?text=' + encodeURIComponent(message.value);
-    }
-
-    openButton?.addEventListener('click', function () {
-        const url = buildWhatsAppUrl();
-        if (!url) {
-            hint.textContent = 'Customer does not have a valid phone number.';
-            return;
-        }
-        window.open(url, '_blank', 'noopener,noreferrer');
-    });
-
-    copyButton?.addEventListener('click', async function () {
-        try {
-            await navigator.clipboard.writeText(message.value);
-            hint.textContent = 'Message copied.';
-        } catch (error) {
-            hint.textContent = 'Copy failed. Select the message and copy it manually.';
-        }
-    });
+    function buildWhatsAppUrl() { let normalized = phone; if (normalized.length === 10) normalized = '91' + normalized; if (!normalized) return null; return 'https://wa.me/' + normalized + '?text=' + encodeURIComponent(message.value); }
+    openButton?.addEventListener('click', function () { const url = buildWhatsAppUrl(); if (!url) { hint.textContent = 'Customer does not have a valid phone number.'; return; } window.open(url, '_blank', 'noopener,noreferrer'); });
+    copyButton?.addEventListener('click', async function () { try { await navigator.clipboard.writeText(message.value); hint.textContent = 'Message copied.'; } catch (error) { hint.textContent = 'Copy failed. Select the message and copy it manually.'; } });
 })();
 </script>
 {% endblock %}
