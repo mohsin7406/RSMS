@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <div><h1 class="text-2xl font-bold">New Booking</h1></div>
+  <form method="post" class="bg-white dark:bg-slate-900 p-6 rounded-xl border space-y-5">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid md:grid-cols-2 gap-4">
+      <label class="block"><span class="text-sm font-medium">Customer ID</span><input name="customer_id" type="number" min="1" required class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
+      <label class="block"><span class="text-sm font-medium">Technician</span><select name="technician_id" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"><option value="">Unassigned</option>{% for tech in technicians %}<option value="{{ tech.id }}">{{ tech.email }}</option>{% endfor %}</select></label>
+      <label class="block"><span class="text-sm font-medium">Scheduled date/time</span><input name="scheduled_at" type="datetime-local" required class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
+      <label class="block"><span class="text-sm font-medium">Service type</span><select name="service_type" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"><option>Doorstep</option><option>In-Shop</option><option>Pickup/Drop</option></select></label>
+      <label class="block"><span class="text-sm font-medium">Area</span><input name="area" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></label>
+    </div>
+    <label class="block"><span class="text-sm font-medium">Address</span><textarea name="address" rows="3" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></textarea></label>
+    <label class="block"><span class="text-sm font-medium">Notes</span><textarea name="notes" rows="3" class="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-slate-800"></textarea></label>
+    <button class="px-4 py-2 bg-blue-600 text-white rounded-lg">Create Booking</button>
+  </form>
+</div>
+{% endblock %}
