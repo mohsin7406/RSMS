@@ -4,6 +4,7 @@ from hmac import compare_digest
 
 from flask import abort, current_app, g, redirect, render_template, request, session, url_for
 
+from app.extensions import db
 from app.models import User
 
 
@@ -29,7 +30,7 @@ def validate_csrf() -> None:
 
 def load_current_user() -> None:
     user_id = session.get("user_id")
-    g.current_user = User.query.get(user_id) if user_id else None
+    g.current_user = db.session.get(User, user_id) if user_id else None
 
 
 def current_user_id():
