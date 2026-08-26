@@ -33,8 +33,9 @@ def create_app(config_name=None):
     from app.routes.job_materials import materials_bp
     from app.routes.purchases import purchases_bp
     from app.routes.operations import ops_bp
+    from app.routes.system_settings import settings_bp
     from app.services import notification_hooks  # noqa:F401
-    for bp in [main_bp,auth_bp,customer_bp,repair_bp,inventory_bp,billing_bp,qc_bp,warranty_bp,profitability_bp,leads_bp,bookings_bp,conversion_bp,technician_bp,confirmation_bp,customer_status_bp,users_bp,notifications_bp,sms_logs_bp,materials_bp,purchases_bp,ops_bp]: app.register_blueprint(bp)
+    for bp in [main_bp,auth_bp,customer_bp,repair_bp,inventory_bp,billing_bp,qc_bp,warranty_bp,profitability_bp,leads_bp,bookings_bp,conversion_bp,technician_bp,confirmation_bp,customer_status_bp,users_bp,notifications_bp,sms_logs_bp,materials_bp,purchases_bp,ops_bp,settings_bp]: app.register_blueprint(bp)
     from app.commands import create_admin,reset_admin_password,seed_db,seed_db_all
     app.cli.add_command(create_admin); app.cli.add_command(reset_admin_password); app.cli.add_command(seed_db_all); app.cli.add_command(seed_db)
     return app
