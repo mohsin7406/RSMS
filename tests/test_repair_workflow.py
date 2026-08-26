@@ -4,18 +4,18 @@ from app.extensions import db
 from app.models import Customer, RepairOrder, RepairQC, User
 
 
-def _csrf_token(client):
-    response = client.get("/auth/login")
+def _csrf_token(client, path="/auth/login"):
+    response = client.get(path)
     match = re.search(r'name="csrf_token" value="([^"]+)"', response.get_data(as_text=True))
-    assert match
+    assert match, f"CSRF token not found on {path}; status={response.status_code}"
     return match.group(1)
 
 
-def _login(client, csrf_token, email="admin@example.com", password="AdminPassword123!"):
+def _login(client, token, email="admin@example.com", password="AdminPassword123!"):
     return client.post(
         "/auth/login",
         data={
-            "csrf_token": csrf_token,
+            "csrf_token": token,
             "email": email,
             "password": password,
         },
@@ -38,8 +38,7 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
     login = _login(client, _csrf_token(client))
     assert login.status_code == 302
 
-    # login clears the session, so obtain a fresh CSRF token after authentication
-    token = _csrf_token(client)
+    token = _csrf_token(client, "/dashboard")
     response = client.post(
         "/repairs/add",
         data={
@@ -66,10 +65,9 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert repair.assigned_technician_id == technician_id
         repair_id = repair.id
 
-    token = _csrf_token(client)
     checklist = {f"check_{idx}": "pass" for idx in range(10)}
     checklist.update({
-        "csrf_token": token,
+        "csrf_token": _csrf_token(client, f"/qc/repair/{repair_id}"),
         "status": "Passed",
         "notes": "All tests passed",
     })
