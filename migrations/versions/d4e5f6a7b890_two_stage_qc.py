@@ -35,30 +35,35 @@ def upgrade():
     inspector = inspect(bind)
     existing_columns = {column["name"] for column in inspector.get_columns("repair_qc")}
 
-    # SQLite DDL can survive a failed Alembic migration. Make the migration
-    # resume-safe so a partially applied migration can finish cleanly.
     for name, column in _COLUMNS:
         if name not in existing_columns:
             op.add_column("repair_qc", column)
 
+    # SQLite cannot ALTER TABLE to add/drop foreign keys directly. Rebuild the
+    # table in batch mode so the migration works on both SQLite and other DBs.
     inspector = inspect(bind)
     existing_fks = {
         fk.get("name")
         for fk in inspector.get_foreign_keys("repair_qc")
         if fk.get("name")
     }
+    missing_fks = []
     for constraint_name, local_column in (
         ("fk_repair_qc_before_user", "before_tested_by_id"),
         ("fk_repair_qc_after_user", "after_tested_by_id"),
     ):
         if constraint_name not in existing_fks:
-            op.create_foreign_key(
-                constraint_name,
-                "repair_qc",
-                "user",
-                [local_column],
-                ["id"],
-            )
+            missing_fks.append((constraint_name, local_column))
+
+    if missing_fks:
+        with op.batch_alter_table("repair_qc", recreate="always") as batch_op:
+            for constraint_name, local_column in missing_fks:
+                batch_op.create_foreign_key(
+                    constraint_name,
+                    "user",
+                    [local_column],
+                    ["id"],
+                )
 
     inspector = inspect(bind)
     existing_indexes = {index["name"] for index in inspector.get_indexes("repair_qc")}
@@ -69,10 +74,12 @@ def upgrade():
 
 
 def downgrade():
+    with op.batch_alter_table("repair_qc", recreate="always") as batch_op:
+        batch_op.drop_constraint("fk_repair_qc_after_user", type_="foreignkey")
+        batch_op.drop_constraint("fk_repair_qc_before_user", type_="foreignkey")
+
     op.drop_index("ix_repair_qc_after_status", table_name="repair_qc")
     op.drop_index("ix_repair_qc_before_status", table_name="repair_qc")
-    op.drop_constraint("fk_repair_qc_after_user", "repair_qc", type_="foreignkey")
-    op.drop_constraint("fk_repair_qc_before_user", "repair_qc", type_="foreignkey")
     for column in (
         "after_photos", "after_tested_at", "after_tested_by_id", "after_notes", "after_checklist", "after_status",
         "before_photos", "before_tested_at", "before_tested_by_id", "before_notes", "before_checklist", "before_status",
