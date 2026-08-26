@@ -7,7 +7,7 @@ from flask import abort
 from app.extensions import db
 from app.models import Invoice, Payment, RepairOrder
 from app.models.payment import PAYMENT_METHODS, PAYMENT_TYPES
-from app.security import permission_required
+from app.security import permission_required, role_required
 
 billing_bp = Blueprint("billing", __name__, url_prefix="/billing")
 
@@ -54,39 +54,20 @@ def _create_invoice_for_repair(repair, discount=Decimal("0"), tax=Decimal("0")):
         issued_at=datetime.now(timezone.utc),
         due_at=datetime.now(timezone.utc),
     )
-    repair.final_amount = total
     db.session.add(invoice)
     db.session.flush()
+
+    unlinked = Payment.query.filter_by(repair_id=repair.id, invoice_id=None).all()
+    for payment in unlinked:
+        payment.invoice_id = invoice.id
+
+    net_paid = max(sum((p.amount for p in unlinked if p.payment_type == "Payment"), Decimal("0")) - sum((p.amount for p in unlinked if p.payment_type == "Refund"), Decimal("0")), Decimal("0"))
+    outstanding = max(total - net_paid, Decimal("0"))
+    invoice.status = "Paid" if outstanding == 0 and total > 0 else "Partially Paid" if net_paid > 0 else "Issued"
+    repair.final_amount = total
+    repair.amount_paid = net_paid
+    repair.payment_status = "Paid" if outstanding == 0 and total > 0 else "Partially Paid" if net_paid > 0 else "Unpaid"
     return invoice
-
-
-def _apply_payment(invoice, amount, method, reference=None, notes=None):
-    paid, refunded, net_paid, balance = _totals(invoice)
-    if amount <= 0:
-        return None, "Payment amount must be greater than zero"
-    if amount > balance:
-        return None, "Payment exceeds outstanding balance"
-
-    payment = Payment(
-        payment_number=_number("PAY", Payment, "payment_number"),
-        repair_id=invoice.repair_id,
-        invoice_id=invoice.id,
-        amount=amount,
-        payment_method=method,
-        payment_type="Payment",
-        reference=reference or None,
-        notes=notes or None,
-        received_by_id=g.current_user.id if g.current_user else None,
-    )
-    db.session.add(payment)
-    net_paid += amount
-    outstanding = max(invoice.total - net_paid, Decimal("0"))
-    invoice.status = "Paid" if outstanding == 0 else "Partially Paid"
-    repair = invoice.repair
-    repair.amount_paid = max(net_paid, Decimal("0"))
-    repair.payment_status = "Paid" if outstanding == 0 else "Partially Paid"
-    repair.payment_method = method
-    return payment, None
 
 
 @billing_bp.route("/repair/<int:repair_id>/invoice", methods=["POST"])
@@ -95,21 +76,18 @@ def create_invoice(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
     if repair.invoice:
         return redirect(url_for("billing.view_invoice", invoice_id=repair.invoice.id))
-
-    invoice = _create_invoice_for_repair(
-        repair,
-        discount=_money(request.form.get("discount")),
-        tax=_money(request.form.get("tax")),
-    )
+    invoice = _create_invoice_for_repair(repair, discount=_money(request.form.get("discount")), tax=_money(request.form.get("tax")))
     db.session.commit()
     flash(f"Invoice {invoice.invoice_number} created", "success")
     return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
 
 
 @billing_bp.route("/repair/<int:repair_id>/doorstep-payment", methods=["POST"])
-@permission_required("billing")
+@role_required("admin", "manager", "staff", "accounts", "technician")
 def collect_doorstep_payment(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
+    if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
+        return ("Forbidden", 403)
     if repair.service_type != "Doorstep":
         flash("This payment action is only for Doorstep jobs", "error")
         return redirect(url_for("repair.view_repair", id=repair.id))
@@ -119,29 +97,38 @@ def collect_doorstep_payment(repair_id):
 
     method = request.form.get("payment_method", "")
     amount = _money(request.form.get("amount"))
-    if method not in PAYMENT_METHODS:
-        flash("Select a valid payment method", "error")
+    if method not in PAYMENT_METHODS or amount <= 0:
+        flash("Enter a valid payment amount and method", "error")
         return redirect(url_for("repair.view_repair", id=repair.id))
 
-    # The invoice row is created internally in the same transaction so the
-    # payment has a valid accounting parent. To staff, this remains the desired
-    # operational flow: Job Complete -> Collect Payment -> Invoice.
-    invoice = _create_invoice_for_repair(repair)
-    payment, error = _apply_payment(
-        invoice,
-        amount,
-        method,
-        reference=request.form.get("reference", "").strip(),
-        notes="Doorstep payment collected after job completion",
-    )
-    if error:
-        db.session.rollback()
-        flash(error, "error")
+    outstanding = max(_money(repair.final_amount) - _money(repair.amount_paid), Decimal("0"))
+    if amount > outstanding:
+        flash("Payment exceeds outstanding amount", "error")
         return redirect(url_for("repair.view_repair", id=repair.id))
+
+    payment = Payment(
+        payment_number=_number("PAY", Payment, "payment_number"),
+        repair_id=repair.id,
+        invoice_id=repair.invoice.id if repair.invoice else None,
+        amount=amount,
+        payment_method=method,
+        payment_type="Payment",
+        reference=request.form.get("reference", "").strip() or None,
+        notes="Doorstep payment collected after job completion",
+        received_by_id=g.current_user.id if g.current_user else None,
+    )
+    db.session.add(payment)
+    repair.amount_paid = _money(repair.amount_paid) + amount
+    remaining = max(_money(repair.final_amount) - repair.amount_paid, Decimal("0"))
+    repair.payment_status = "Paid" if remaining == 0 else "Partially Paid"
+    repair.payment_method = method
+
+    if repair.invoice:
+        repair.invoice.status = "Paid" if remaining == 0 else "Partially Paid"
 
     db.session.commit()
-    flash(f"Payment {payment.payment_number} recorded. Invoice {invoice.invoice_number} generated", "success")
-    return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
+    flash(f"Payment {payment.payment_number} recorded", "success")
+    return redirect(url_for("repair.view_repair", id=repair.id))
 
 
 @billing_bp.route("/invoice/<int:invoice_id>")
@@ -174,27 +161,12 @@ def record_payment(invoice_id):
         flash("Refund exceeds net amount paid", "error")
         return redirect(url_for("billing.view_invoice", invoice_id=invoice_id))
 
-    payment = Payment(
-        payment_number=_number("PAY", Payment, "payment_number"),
-        repair_id=invoice.repair_id,
-        invoice_id=invoice.id,
-        amount=amount,
-        payment_method=method,
-        payment_type=payment_type,
-        reference=request.form.get("reference", "").strip() or None,
-        notes=request.form.get("notes", "").strip() or None,
-        received_by_id=g.current_user.id if g.current_user else None,
-    )
+    payment = Payment(payment_number=_number("PAY", Payment, "payment_number"), repair_id=invoice.repair_id, invoice_id=invoice.id, amount=amount, payment_method=method, payment_type=payment_type, reference=request.form.get("reference", "").strip() or None, notes=request.form.get("notes", "").strip() or None, received_by_id=g.current_user.id if g.current_user else None)
     db.session.add(payment)
 
-    if payment_type == "Payment":
-        net_paid += amount
-    else:
-        net_paid -= amount
-
+    net_paid = net_paid + amount if payment_type == "Payment" else net_paid - amount
     outstanding = max(invoice.total - net_paid, Decimal("0"))
     invoice.status = "Paid" if outstanding == 0 else "Partially Paid" if net_paid > 0 else "Issued"
-
     repair = invoice.repair
     repair.amount_paid = max(net_paid, Decimal("0"))
     repair.payment_status = "Paid" if outstanding == 0 else "Partially Paid" if net_paid > 0 else "Unpaid"
