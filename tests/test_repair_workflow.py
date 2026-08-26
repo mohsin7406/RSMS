@@ -50,10 +50,7 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert repair.assigned_technician_id == technician_id
         repair_id = repair.id
 
-    checklist = {
-        f"check_{idx}": "pass"
-        for idx in range(10)
-    }
+    checklist = {f"check_{idx}": "pass" for idx in range(10)}
     checklist["status"] = "Passed"
     checklist["notes"] = "All tests passed"
     response = client.post(f"/qc/repair/{repair_id}", data=checklist, follow_redirects=False)
@@ -61,7 +58,7 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
 
     with app.app_context():
         repair = db.session.get(RepairOrder, repair_id)
-        qc = db.session.get(RepairQC, repair_id)
+        qc = RepairQC.query.filter_by(repair_id=repair_id).one()
         assert repair.status == "Ready"
         assert qc.status == "Passed"
         assert all(value == "pass" for value in qc.checklist.values())
