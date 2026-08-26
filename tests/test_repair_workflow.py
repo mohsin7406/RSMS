@@ -12,15 +12,7 @@ def _csrf_token(client, path="/auth/login"):
 
 
 def _login(client, token, email="admin@example.com", password="AdminPassword123!"):
-    return client.post(
-        "/auth/login",
-        data={
-            "csrf_token": token,
-            "email": email,
-            "password": password,
-        },
-        follow_redirects=False,
-    )
+    return client.post("/auth/login", data={"csrf_token": token, "email": email, "password": password}, follow_redirects=False)
 
 
 def _checklist(client, repair_id, stage):
@@ -44,6 +36,7 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         db.session.commit()
         customer_id = customer.id
         technician_id = technician.id
+        admin_id = admin.id
 
     login = _login(client, _csrf_token(client))
     assert login.status_code == 302
@@ -75,7 +68,6 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert repair.assigned_technician_id == technician_id
         repair_id = repair.id
 
-    # QC Before is recorded separately and must pass before repair work can start.
     response = client.post(f"/qc/repair/{repair_id}", data=_checklist(client, repair_id, "before"), follow_redirects=False)
     assert response.status_code == 302
 
@@ -84,9 +76,15 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert qc.before_status == "Passed"
         assert all(value == "pass" for value in qc.before_checklist.values())
         assert qc.before_tested_at is not None
-        assert qc.before_tested_by_id == admin.id
+        assert qc.before_tested_by_id == admin_id
 
-    # QC After is a separate checkpoint and is the gate to Ready.
+    response = client.post(
+        f"/repairs/update_status/{repair_id}",
+        data={"csrf_token": _csrf_token(client, f"/repairs/edit/{repair_id}"), "status": "In Repair"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
     response = client.post(f"/qc/repair/{repair_id}", data=_checklist(client, repair_id, "after"), follow_redirects=False)
     assert response.status_code == 302
 
@@ -97,4 +95,5 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
         assert qc.after_status == "Passed"
         assert all(value == "pass" for value in qc.after_checklist.values())
         assert qc.after_tested_at is not None
-        assert qc.after_tested_by_id == admin.id
+        assert qc.after_tested_by_id == admin_id
+        assert qc.before_tested_at != qc.after_tested_at
