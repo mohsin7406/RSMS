@@ -32,6 +32,11 @@ def _ensure_repair_for_booking(booking):
     device = lead.device if lead and lead.device else "Booking device"
     issue = lead.issue if lead and lead.issue else booking.notes or "Issue to be diagnosed"
 
+    # Doorstep jobs never enter a device-received queue. Once a technician is
+    # assigned and the appointment is confirmed, the operational repair job is
+    # already approved and can proceed to QC Before at the customer's location.
+    initial_status = "Approved" if booking.service_type == "Doorstep" and booking.technician_id else "Pending"
+
     repair = RepairOrder(
         job_number=_job_number(),
         customer_id=booking.customer_id,
@@ -39,7 +44,8 @@ def _ensure_repair_for_booking(booking):
         device=device,
         issue_description=issue,
         service_type=booking.service_type,
-        status="Pending",
+        status=initial_status,
+        customer_approved=initial_status == "Approved",
     )
     db.session.add(repair)
     db.session.flush()
@@ -111,7 +117,10 @@ def update_status(id):
 
     db.session.commit()
     if created and repair is not None:
-        flash(f"Booking confirmed and linked to repair {repair.job_number}", "success")
+        if repair.service_type == "Doorstep" and repair.status == "Approved":
+            flash(f"Booking confirmed. Doorstep job {repair.job_number} is Approved and ready for QC Before", "success")
+        else:
+            flash(f"Booking confirmed and linked to repair {repair.job_number}", "success")
     else:
         flash("Booking status updated", "success")
     return redirect(url_for("bookings.list_bookings"))
