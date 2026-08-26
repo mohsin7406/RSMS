@@ -1,52 +1,92 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="max-w-5xl mx-auto space-y-6">
     <a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="text-sm text-slate-500 hover:text-blue-600">← Back to {{ repair.job_number }}</a>
+
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-3xl font-bold">Quality Control</h1>
             <p class="text-slate-500 mt-1">{{ repair.job_number }} · {{ repair.device }}</p>
         </div>
-        <span class="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 dark:bg-slate-800">{{ qc.status if qc else 'Pending' }}</span>
+        <div class="flex gap-2 text-sm">
+            <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800">Before: {{ qc.before_status }}</span>
+            <span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800">After: {{ qc.after_status }}</span>
+        </div>
     </div>
 
-    <form method="post" class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div>
-            <label class="block text-sm font-medium mb-2">QC Result</label>
-            <select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800" required>
-                {% for status in ['Pending', 'Passed', 'Failed', 'Waived'] %}
-                <option value="{{ status }}" {% if (qc.status if qc else 'Pending') == status %}selected{% endif %}>{{ status }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div>
-            <h2 class="font-bold mb-3">Checklist</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {% for check in checks %}
-                {% set value = (qc.checklist or {}).get(check, '') if qc else '' %}
-                <div class="border rounded-lg p-4">
-                    <div class="font-medium mb-2">{{ check }}</div>
-                    <div class="flex gap-4 text-sm">
-                        <label><input type="radio" name="check_{{ loop.index0 }}" value="pass" {% if value == 'pass' %}checked{% endif %}> Pass</label>
-                        <label><input type="radio" name="check_{{ loop.index0 }}" value="fail" {% if value == 'fail' %}checked{% endif %}> Fail</label>
-                        <label><input type="radio" name="check_{{ loop.index0 }}" value="na" {% if value == 'na' %}checked{% endif %}> N/A</label>
-                    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+        {% for qc_stage, stage_title, status_field, checklist_field, notes_field, tester_field, tested_at_field, photos_field in [
+            ('before', 'QC Before Repair', 'before_status', 'before_checklist', 'before_notes', 'before_tested_by', 'before_tested_at', 'before_photos'),
+            ('after', 'QC After Repair', 'after_status', 'after_checklist', 'after_notes', 'after_tested_by', 'after_tested_at', 'after_photos')
+        ] %}
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('qc.save_qc', repair_id=repair.id) }}" class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="{{ qc_stage }}">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-xl font-bold">{{ stage_title }}</h2>
+                    <p class="text-sm text-slate-500 mt-1">Separate evidence and timestamp for this checkpoint.</p>
                 </div>
-                {% endfor %}
+                <span class="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 dark:bg-slate-800">{{ qc|attr(status_field) }}</span>
             </div>
-        </div>
 
-        <div>
-            <label class="block text-sm font-medium mb-2">QC Notes</label>
-            <textarea name="notes" rows="4" class="w-full px-3 py-2 rounded border dark:bg-slate-800">{{ qc.notes if qc else '' }}</textarea>
-        </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Result</label>
+                <select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800" required>
+                    {% for status in ['Pending', 'Passed', 'Failed', 'Waived'] %}
+                    <option value="{{ status }}" {% if qc|attr(status_field) == status %}selected{% endif %}>{{ status }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
-        <div class="flex justify-end gap-3">
-            <a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="px-5 py-2 rounded border">Cancel</a>
-            <button class="px-5 py-2 rounded bg-indigo-600 text-white font-medium">Save QC</button>
-        </div>
-    </form>
+            <div>
+                <h3 class="font-bold mb-3">Checklist</h3>
+                <div class="space-y-3">
+                    {% for check in checks %}
+                    {% set value = (qc|attr(checklist_field) or {}).get(check, '') %}
+                    <div class="border rounded-lg p-3">
+                        <div class="font-medium mb-2">{{ check }}</div>
+                        <div class="flex gap-4 text-sm">
+                            <label><input type="radio" name="check_{{ loop.index0 }}" value="pass" {% if value == 'pass' %}checked{% endif %}> Pass</label>
+                            <label><input type="radio" name="check_{{ loop.index0 }}" value="fail" {% if value == 'fail' %}checked{% endif %}> Fail</label>
+                            <label><input type="radio" name="check_{{ loop.index0 }}" value="na" {% if value == 'na' %}checked{% endif %}> N/A</label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2">Notes</label>
+                <textarea name="notes" rows="4" class="w-full px-3 py-2 rounded border dark:bg-slate-800">{{ qc|attr(notes_field) or '' }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2">Photos</label>
+                <input type="file" name="photos" multiple accept="image/jpeg,image/png,image/webp" class="w-full text-sm">
+                <p class="text-xs text-slate-500 mt-1">JPG PNG or WebP · up to 8 MB each</p>
+                {% set photos = qc|attr(photos_field) or [] %}
+                {% if photos %}
+                <div class="grid grid-cols-3 gap-2 mt-3">
+                    {% for photo in photos %}
+                    <a href="{{ url_for('static', filename=photo) }}" target="_blank" rel="noopener">
+                        <img src="{{ url_for('static', filename=photo) }}" class="w-full h-24 object-cover rounded border" alt="QC photo">
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% set tester = qc|attr(tester_field) %}
+            {% set tested_at = qc|attr(tested_at_field) %}
+            <div class="text-xs text-slate-500 border-t pt-3">
+                <div>Technician: {{ tester.email if tester else 'Not recorded' }}</div>
+                <div>Timestamp: {{ tested_at.strftime('%Y-%m-%d %H:%M UTC') if tested_at else 'Not completed' }}</div>
+            </div>
+
+            <button class="w-full px-5 py-2 rounded bg-indigo-600 text-white font-medium">Save {{ 'Before' if qc_stage == 'before' else 'After' }} QC</button>
+        </form>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}
