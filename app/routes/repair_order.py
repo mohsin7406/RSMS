@@ -6,6 +6,7 @@ from sqlalchemy import or_
 
 from app.extensions import db
 from app.models import Customer, RepairOrder, RepairAuditLog, Part, PartUsage, StockMovement, User
+from app.models.notification_template import NotificationTemplate
 from app.models.repair import REPAIR_STATUSES, PAYMENT_STATUSES
 from app.models.qc import RepairQC
 from app.security import current_user_id, login_required, role_required
@@ -27,6 +28,11 @@ REPAIR_TRANSITIONS = {
     "Delivered": set(),
     "Cancelled": set(),
 }
+
+WHATSAPP_WEB_DEFAULT = (
+    "Hi {customer_name}, your FixZone repair {job_number} for {device} "
+    "is currently {status}."
+)
 
 
 def _audit(repair, action, old_value=None, new_value=None):
@@ -112,6 +118,24 @@ def _delivery_allowed(repair):
     return True, None
 
 
+def _whatsapp_message(repair):
+    template = NotificationTemplate.query.filter_by(channel="whatsapp_web", event="repair_message").first()
+    body = template.body if template and template.enabled and template.body else WHATSAPP_WEB_DEFAULT
+    values = {
+        "customer_name": repair.customer.name,
+        "job_number": repair.job_number,
+        "device": repair.device,
+        "status": repair.status,
+        "amount": f"{repair.final_amount:.2f}",
+        "amount_paid": f"{repair.amount_paid:.2f}",
+        "payment_status": repair.payment_status,
+    }
+    try:
+        return body.format(**values)
+    except (KeyError, ValueError):
+        return WHATSAPP_WEB_DEFAULT.format(**values)
+
+
 @repair_bp.route("/")
 @repair_bp.route("/list")
 @login_required
@@ -195,7 +219,7 @@ def view_repair(id):
     if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
         return ("Forbidden", 403)
     qc = RepairQC.query.filter_by(repair_id=repair.id).first()
-    return render_template("repairs/detail.html", repair=repair, qc=qc)
+    return render_template("repairs/detail.html", repair=repair, qc=qc, whatsapp_message=_whatsapp_message(repair))
 
 
 @repair_bp.route("/audit/<int:id>")
