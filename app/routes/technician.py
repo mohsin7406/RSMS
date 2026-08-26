@@ -1,11 +1,11 @@
-from datetime import datetime, time, timezone
+from datetime import datetime, time
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.extensions import db
 from app.models import Booking, RepairOrder, RepairAuditLog, RepairQC
 from app.models.repair import REPAIR_STATUSES
-from app.routes.repair_order import REPAIR_TRANSITIONS
+from app.routes.repair_order import DOORSTEP_STATUSES, DOORSTEP_TRANSITIONS, REPAIR_TRANSITIONS
 from app.security import role_required, current_user_id
 
 
@@ -28,7 +28,7 @@ def dashboard():
     technician_id = current_user_id()
     now = datetime.now()
     today_start = datetime.combine(now.date(), time.min)
-    tomorrow_start = datetime.combine(now.date(), time.max)
+    today_end = datetime.combine(now.date(), time.max)
 
     all_bookings = (
         Booking.query.filter_by(technician_id=technician_id)
@@ -36,14 +36,17 @@ def dashboard():
         .order_by(Booking.scheduled_at.asc())
         .all()
     )
-    today_bookings = [b for b in all_bookings if today_start <= b.scheduled_at <= tomorrow_start]
-    upcoming_bookings = [b for b in all_bookings if b.scheduled_at > tomorrow_start]
+    today_bookings = [b for b in all_bookings if today_start <= b.scheduled_at <= today_end]
+    upcoming_bookings = [b for b in all_bookings if b.scheduled_at > today_end]
 
-    repairs = _assigned_repairs(technician_id)
+    all_repairs = _assigned_repairs(technician_id)
+    active_repairs = [r for r in all_repairs if r.status not in {"Completed", "Delivered", "Cancelled"}]
+    completed_repairs = [r for r in all_repairs if r.status in {"Completed", "Delivered"}]
+
     qc_by_repair = {
         qc.repair_id: qc
-        for qc in RepairQC.query.filter(RepairQC.repair_id.in_([r.id for r in repairs])).all()
-    } if repairs else {}
+        for qc in RepairQC.query.filter(RepairQC.repair_id.in_([r.id for r in all_repairs])).all()
+    } if all_repairs else {}
 
     qc_before_pending = []
     qc_after_pending = []
@@ -51,15 +54,25 @@ def dashboard():
     waiting_parts = []
     ready = []
 
-    for repair in repairs:
+    for repair in active_repairs:
         qc = qc_by_repair.get(repair.id)
-        if repair.status in {"Approved", "Waiting Parts"} and (qc is None or qc.before_status not in {"Passed", "Waived"}):
+        before_done = qc is not None and qc.before_status in {"Passed", "Waived"}
+        after_done = qc is not None and qc.after_status in {"Passed", "Waived"}
+
+        if repair.service_type == "Doorstep":
+            if repair.status == "Approved" and not before_done:
+                qc_before_pending.append(repair)
+            elif repair.status == "Approved" and before_done and not after_done:
+                qc_after_pending.append(repair)
+            continue
+
+        if repair.status in {"Approved", "Waiting Parts"} and not before_done:
             qc_before_pending.append(repair)
         if repair.status == "In Repair":
             in_repair.append(repair)
         if repair.status == "Waiting Parts":
             waiting_parts.append(repair)
-        if repair.status == "QC" and (qc is None or qc.after_status not in {"Passed", "Waived"}):
+        if repair.status == "QC" and not after_done:
             qc_after_pending.append(repair)
         if repair.status == "Ready":
             ready.append(repair)
@@ -71,14 +84,16 @@ def dashboard():
         "waiting_parts": len(waiting_parts),
         "qc_after": len(qc_after_pending),
         "ready": len(ready),
-        "assigned": len(repairs),
+        "assigned": len(active_repairs),
+        "completed": len(completed_repairs),
     }
 
     return render_template(
         "technician/dashboard.html",
         bookings=today_bookings,
         upcoming_bookings=upcoming_bookings,
-        repairs=repairs,
+        repairs=active_repairs,
+        completed_repairs=completed_repairs,
         qc_before_pending=qc_before_pending,
         qc_after_pending=qc_after_pending,
         in_repair=in_repair,
@@ -123,15 +138,23 @@ def repair_status(id):
     if status not in REPAIR_STATUSES:
         flash("Invalid repair status", "error")
         return redirect(url_for("technician.dashboard"))
-    if status != repair.status and status not in REPAIR_TRANSITIONS.get(repair.status, set()):
+
+    if repair.service_type == "Doorstep":
+        if status not in DOORSTEP_STATUSES:
+            flash("Doorstep jobs progress through QC Before and QC After, not In Repair statuses", "error")
+            return redirect(url_for("technician.dashboard"))
+        if status != repair.status and status not in DOORSTEP_TRANSITIONS.get(repair.status, set()):
+            flash(f"Invalid Doorstep status transition: {repair.status} → {status}", "error")
+            return redirect(url_for("technician.dashboard"))
+    elif status != repair.status and status not in REPAIR_TRANSITIONS.get(repair.status, set()):
         flash(f"Invalid status transition: {repair.status} → {status}", "error")
         return redirect(url_for("technician.dashboard"))
 
     qc = RepairQC.query.filter_by(repair_id=repair.id).first()
-    if status == "In Repair" and (qc is None or qc.before_status not in {"Passed", "Waived"}):
+    if repair.service_type != "Doorstep" and status == "In Repair" and (qc is None or qc.before_status not in {"Passed", "Waived"}):
         flash("QC Before Repair must be passed or waived before repair work can start", "error")
         return redirect(url_for("technician.dashboard"))
-    if status == "Ready":
+    if repair.service_type != "Doorstep" and status == "Ready":
         flash("QC After Repair must be passed before the repair can be marked Ready", "error")
         return redirect(url_for("technician.dashboard"))
     if status == "Delivered":
