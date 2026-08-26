@@ -38,7 +38,9 @@ def test_repair_assignment_persists_and_qc_can_make_repair_ready(app, client):
     login = _login(client, _csrf_token(client))
     assert login.status_code == 302
 
-    token = _csrf_token(client, "/dashboard")
+    # /dashboard does not render a CSRF field. Use the authenticated repair form,
+    # which calls csrf_token() and therefore exposes the current session token.
+    token = _csrf_token(client, "/repairs/add")
     response = client.post(
         "/repairs/add",
         data={
