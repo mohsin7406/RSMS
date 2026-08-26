@@ -1,5 +1,5 @@
-from sqlalchemy import event
-from sqlalchemy.orm import Session, inspect
+from sqlalchemy import event, inspect
+from sqlalchemy.orm import Session
 
 from app.models.payment import Payment
 from app.models.repair import RepairOrder
@@ -55,13 +55,9 @@ def send_queued_sms(session):
     queue = session.info.pop("sms_notifications", [])
     session.info.pop("sms_notification_keys", None)
     for event_name, repair_id, values in queue:
-        # The ORM session may be expired after commit, so the repair snapshot
-        # is reconstructed from primitive values collected before commit.
         repair = session.get(RepairOrder, repair_id)
         if repair is not None:
             try:
                 notify_customer(event_name, repair, **values)
             except Exception:
-                # Notification failures must never roll back a completed repair
-                # or payment transaction.
                 pass
