@@ -10,6 +10,7 @@ from app.models.payment import Payment
 from app.models.qc import RepairQC
 from app.models.warranty_claim import WarrantyClaim
 from app.models.lead import Lead
+from app.models.lead_contact import LeadContact
 from app.models.booking import Booking
 from app.models.service_confirmation import ServiceConfirmation
 from app.models.repair_photo import RepairPhoto
@@ -18,6 +19,6 @@ from app.models.sms_log import SMSLog
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage",
-    "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "Booking",
+    "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "LeadContact", "Booking",
     "ServiceConfirmation", "RepairPhoto", "NotificationTemplate", "SMSLog",
 ]
