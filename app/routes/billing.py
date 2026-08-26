@@ -79,18 +79,47 @@ def create_invoice(repair_id):
     return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
 
 
+@billing_bp.route("/invoice/<int:invoice_id>/edit", methods=["GET", "POST"])
+@permission_required("billing")
+def edit_invoice(invoice_id):
+    invoice = Invoice.query.filter_by(id=invoice_id).with_for_update().first_or_404()
+    repair = invoice.repair
+    if request.method == "POST":
+        repair.device = request.form.get("device", "").strip() or repair.device
+        model = request.form.get("model", "").strip()
+        repair.model = model if model and model.casefold() != repair.device.casefold() else None
+        repair.imei = request.form.get("imei", "").strip() or None
+        repair.serial_number = request.form.get("serial_number", "").strip() or None
+        repair.issue_description = request.form.get("issue_description", "").strip() or repair.issue_description
+        repair.diagnosis = request.form.get("diagnosis", "").strip() or None
+        repair.repair_notes = request.form.get("repair_notes", "").strip() or None
+        repair.warranty_days = max(request.form.get("warranty_days", 0, type=int), 0)
+        subtotal = _money(request.form.get("subtotal")); discount = min(_money(request.form.get("discount")), subtotal); tax = _money(request.form.get("tax")); total = subtotal - discount + tax
+        _, _, net_paid, _ = _totals(invoice)
+        if total < net_paid:
+            flash("Invoice total cannot be lower than the amount already paid.", "error")
+            return render_template("billing/edit_invoice.html", invoice=invoice)
+        invoice.subtotal = subtotal; invoice.discount = discount; invoice.tax = tax; invoice.total = total
+        repair.final_amount = total; repair.amount_paid = net_paid
+        invoice.status = "Paid" if total > 0 and net_paid == total else "Partially Paid" if net_paid > 0 else "Issued"
+        repair.payment_status = "Paid" if total > 0 and net_paid == total else "Partially Paid" if net_paid > 0 else "Unpaid"
+        db.session.commit(); flash("Invoice updated", "success")
+        return redirect(url_for("billing.view_invoice", invoice_id=invoice.id))
+    return render_template("billing/edit_invoice.html", invoice=invoice)
+
+
 @billing_bp.route("/repair/<int:repair_id>/extra-charge", methods=["POST"])
 @role_required("admin", "manager", "staff", "technician")
 def add_extra_charge(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
     if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id: return ("Forbidden", 403)
-    if repair.service_type != "Doorstep": flash("Extra charge action is currently available for Doorstep jobs", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
-    if repair.invoice: flash("Invoice already exists. Add adjustments from billing instead of changing the job total.", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
+    if repair.service_type != "Doorstep": flash("This action is only for Doorstep jobs", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
+    if repair.invoice: flash("Invoice already exists. Edit the invoice instead.", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
     amount = _money(request.form.get("amount")); description = request.form.get("description", "").strip()
     if amount <= 0 or not description: flash("Enter a valid extra charge amount and reason", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
     prior_extras = _extra_total(repair.id); current_total = _money(repair.final_amount); explicit_base = current_total - prior_extras if current_total > prior_extras else Decimal("0"); base = explicit_base if explicit_base > 0 else _money(repair.estimated_amount)
-    charge = RepairExtraCharge(repair_id=repair.id, amount=amount, description=description, added_by_id=g.current_user.id); db.session.add(charge); db.session.flush(); repair.final_amount = base + prior_extras + amount
-    db.session.commit(); flash(f"Extra charge ₹{amount:.2f} added. New final amount: ₹{repair.final_amount:.2f}", "success"); return redirect(url_for("repair.view_repair", id=repair.id))
+    db.session.add(RepairExtraCharge(repair_id=repair.id, amount=amount, description=description, added_by_id=g.current_user.id)); repair.final_amount = base + prior_extras + amount
+    db.session.commit(); flash(f"Extra charge ₹{amount:.2f} added", "success"); return redirect(url_for("repair.view_repair", id=repair.id))
 
 
 @billing_bp.route("/repair/<int:repair_id>/doorstep-payment", methods=["POST"])
@@ -103,8 +132,8 @@ def collect_doorstep_payment(repair_id):
     method = request.form.get("payment_method", ""); amount = _money(request.form.get("amount"))
     if method not in PAYMENT_METHODS or amount <= 0: flash("Enter a valid payment amount and method", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
     final_amount = _sync_doorstep_final_amount(repair); amount_paid = _money(repair.amount_paid); outstanding = max(final_amount - amount_paid, Decimal("0"))
-    if final_amount <= 0: flash("Neither Estimated nor Final repair amount has been set. Ask Admin/Staff to set the job amount before collecting payment.", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
-    if amount > outstanding: db.session.commit(); flash(f"Payment cannot exceed ₹{outstanding:.2f}. Final Amount: ₹{final_amount:.2f}; Already Paid: ₹{amount_paid:.2f}; Outstanding: ₹{outstanding:.2f}", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
+    if final_amount <= 0: flash("Set the job amount before collecting payment.", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
+    if amount > outstanding: db.session.commit(); flash(f"Payment cannot exceed ₹{outstanding:.2f}", "error"); return redirect(url_for("repair.view_repair", id=repair.id))
     payment = Payment(payment_number=_number("PAY", Payment, "payment_number"), repair_id=repair.id, invoice_id=repair.invoice.id if repair.invoice else None, amount=amount, payment_method=method, payment_type="Payment", reference=request.form.get("reference", "").strip() or None, notes="Doorstep payment collected after job completion", received_by_id=g.current_user.id if g.current_user else None)
     db.session.add(payment); repair.amount_paid = amount_paid + amount; remaining = max(final_amount - repair.amount_paid, Decimal("0")); repair.payment_status = "Paid" if remaining == 0 else "Partially Paid"; repair.payment_method = method
     if repair.invoice: repair.invoice.status = "Paid" if remaining == 0 else "Partially Paid"
@@ -116,12 +145,8 @@ def collect_doorstep_payment(repair_id):
 def view_invoice(invoice_id):
     invoice = db.session.get(Invoice, invoice_id)
     if invoice is None: abort(404)
-    paid, refunded, net_paid, balance = _totals(invoice)
-    repair = invoice.repair
-    parts = [usage for usage in repair.parts_used if usage.remaining_quantity > 0]
-    parts_sale_total = sum((usage.net_sale_total for usage in parts), Decimal("0"))
-    extras_total = _extra_total(repair.id)
-    base_service_amount = max(invoice.subtotal - extras_total - parts_sale_total, Decimal("0"))
+    paid, refunded, net_paid, balance = _totals(invoice); repair = invoice.repair
+    parts = [usage for usage in repair.parts_used if usage.remaining_quantity > 0]; parts_sale_total = sum((usage.net_sale_total for usage in parts), Decimal("0")); extras_total = _extra_total(repair.id); base_service_amount = max(invoice.subtotal - extras_total - parts_sale_total, Decimal("0"))
     warranty_end = None
     if repair.warranty_days and repair.delivered_at:
         from datetime import timedelta
