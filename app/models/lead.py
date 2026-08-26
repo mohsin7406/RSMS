@@ -1,7 +1,7 @@
 from app.extensions import db
 
 
-LEAD_STATUSES = ("New", "Contacted", "Booked", "Converted", "Not Interested", "Lost")
+LEAD_STATUSES = ("New", "Contacted", "Follow Up", "Booked", "Not Interested", "Lost")
 
 
 class Lead(db.Model):
@@ -17,9 +17,12 @@ class Lead(db.Model):
     status = db.Column(db.String(30), nullable=False, default="New", index=True)
     assigned_to_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=True, index=True)
+    booking_id = db.Column(db.Integer, db.ForeignKey("booking.id"), nullable=True, index=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
 
     assigned_to = db.relationship("User", foreign_keys=[assigned_to_id])
     customer = db.relationship("Customer")
+    booking = db.relationship("Booking", foreign_keys=[booking_id])
+    contacts = db.relationship("LeadContact", back_populates="lead", cascade="all, delete-orphan", order_by="LeadContact.contacted_at.desc()")
