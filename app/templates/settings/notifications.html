@@ -3,7 +3,7 @@
 <div class="max-w-5xl mx-auto space-y-6">
   <div>
     <h2 class="text-2xl font-bold">SMS / WhatsApp Settings</h2>
-    <p class="text-sm text-slate-500 mt-1">Configure notification providers. Credentials are only editable by administrators.</p>
+    <p class="text-sm text-slate-500 mt-1">Configure notification providers and customer message templates.</p>
   </div>
   <form method="post" class="space-y-6">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -24,6 +24,29 @@
       </div>
     </section>
     {% endfor %}
+
+    {% if template_events is defined %}
+    <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
+      <div>
+        <h3 class="font-semibold text-lg">SMS Notification Templates</h3>
+        <p class="text-sm text-slate-500 mt-1">Edit the messages customers receive. Leave a message blank to keep the built-in default.</p>
+        <p class="text-xs text-slate-500 mt-2">Variables: <code>{job_number}</code> <code>{device}</code> <code>{amount}</code></p>
+      </div>
+      <div class="space-y-4">
+        {% for event, label in template_events %}
+        {% set template = templates.get(event) %}
+        <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+          <div class="flex items-center justify-between gap-4">
+            <div class="font-medium">{{ label }}</div>
+            <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="template_{{ event }}_enabled" {% if not template or template.enabled %}checked{% endif %}> Enabled</label>
+          </div>
+          <textarea name="template_{{ event }}_body" rows="2" maxlength="1000" class="w-full rounded-lg border p-2 bg-transparent" placeholder="Use the default template">{{ template.body if template and template.body else '' }}</textarea>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
     <button class="px-5 py-2.5 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900">Save Settings</button>
   </form>
 
