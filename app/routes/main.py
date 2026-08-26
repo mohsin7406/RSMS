@@ -1,10 +1,17 @@
-from flask import Blueprint, g, redirect, render_template, session, url_for
+from decimal import Decimal
 
-from app.models import Customer, RepairOrder
+from flask import Blueprint, g, redirect, render_template, session, url_for
+from sqlalchemy import func
+
+from app.extensions import db
+from app.models import Booking, Expense, Lead, Part, RepairOrder, Supplier, SupplierPayment
 from app.security import login_required
 
-
 main_bp = Blueprint("main", __name__)
+
+
+def D(value):
+    return Decimal(value or 0)
 
 
 @main_bp.route("/")
@@ -20,16 +27,34 @@ def dashboard():
     if g.current_user and g.current_user.role == "technician":
         return redirect(url_for("technician.dashboard"))
 
-    total_customers = Customer.query.count()
     active_repairs = RepairOrder.query.filter(RepairOrder.deleted_at.is_(None))
-    total_repairs = active_repairs.count()
-    pending_repairs = active_repairs.filter(RepairOrder.status.in_(["Pending", "Received", "Diagnosing", "Waiting Approval", "Approved", "Waiting Parts", "In Progress", "In Repair", "QC", "Ready"])).count()
-    recent_repairs = active_repairs.order_by(RepairOrder.created_at.desc()).limit(5).all()
+    open_jobs = active_repairs.filter(~RepairOrder.status.in_(["Delivered", "Completed", "Cancelled"])).count()
+    completed_unpaid = active_repairs.filter(RepairOrder.status.in_(["Ready", "Completed"]), RepairOrder.payment_status != "Paid").count()
+    open_leads = Lead.query.filter(Lead.status.in_(["New", "Contacted", "Follow Up"])).count()
+    active_bookings = Booking.query.filter(~Booking.status.in_(["Completed", "Cancelled"])).count()
+    collections = D(db.session.query(func.coalesce(func.sum(RepairOrder.amount_paid), 0)).scalar())
+    expenses = D(db.session.query(func.coalesce(func.sum(Expense.amount), 0)).scalar())
+    low_stock = Part.query.filter(Part.active.is_(True), Part.quantity <= Part.reorder_level).count()
 
+    supplier_outstanding = Decimal("0")
+    for supplier in Supplier.query.all():
+        purchase_total = sum((p.net_total for p in getattr(supplier, "purchases", []) if getattr(p, "status", "Active") != "Voided"), Decimal("0")) if hasattr(supplier, "purchases") else Decimal("0")
+        if not purchase_total:
+            from app.models import Purchase
+            purchase_total = sum((p.net_total for p in Purchase.query.filter_by(supplier_id=supplier.id).all()), Decimal("0"))
+        paid = sum((payment.amount for payment in supplier.payments), Decimal("0"))
+        supplier_outstanding += max(purchase_total - paid, Decimal("0"))
+
+    recent_repairs = active_repairs.order_by(RepairOrder.created_at.desc()).limit(8).all()
     return render_template(
         "dashboard.html",
-        total_customers=total_customers,
-        total_repairs=total_repairs,
-        pending_repairs=pending_repairs,
+        open_jobs=open_jobs,
+        completed_unpaid=completed_unpaid,
+        open_leads=open_leads,
+        active_bookings=active_bookings,
+        collections=collections,
+        expenses=expenses,
+        low_stock=low_stock,
+        supplier_outstanding=supplier_outstanding,
         recent_repairs=recent_repairs,
     )
