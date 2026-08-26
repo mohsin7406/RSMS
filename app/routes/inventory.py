@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.extensions import db
-from app.models import Part, StockMovement
+from app.models import JobPurchase, JobPurchaseReturn, Part, StockMovement
 from app.security import permission_required
 
 inventory_bp = Blueprint("inventory", __name__, url_prefix="/inventory")
@@ -23,6 +23,36 @@ def list_parts():
     parts = Part.query.filter_by(active=True).order_by(Part.name.asc()).all()
     low_stock = [p for p in parts if p.quantity <= p.reorder_level]
     return render_template("inventory/list.html", parts=parts, low_stock=low_stock)
+
+
+@inventory_bp.route("/report")
+@permission_required("inventory")
+def inventory_report():
+    parts = Part.query.filter_by(active=True).order_by(Part.name.asc()).all()
+    low_stock = [part for part in parts if part.quantity <= part.reorder_level]
+    totals = {
+        "skus": len(parts),
+        "units": sum((part.quantity for part in parts), Decimal("0")),
+        "cost_value": sum((part.quantity * part.cost_price for part in parts), Decimal("0")),
+        "retail_value": sum((part.quantity * part.selling_price for part in parts), Decimal("0")),
+        "low_stock": len(low_stock),
+    }
+    movements = StockMovement.query.order_by(StockMovement.created_at.desc()).limit(100).all()
+    pending_job_purchases = [purchase for purchase in JobPurchase.query.order_by(JobPurchase.created_at.desc()).all() if purchase.remaining_quantity > 0]
+    returns = JobPurchaseReturn.query.order_by(JobPurchaseReturn.created_at.desc()).limit(100).all()
+    returned_to_inventory = sum((row.quantity for row in returns if row.destination == "Inventory"), Decimal("0"))
+    returned_to_supplier = sum((row.quantity for row in returns if row.destination == "Supplier"), Decimal("0"))
+    return render_template(
+        "inventory/report.html",
+        parts=parts,
+        low_stock=low_stock,
+        totals=totals,
+        movements=movements,
+        pending_job_purchases=pending_job_purchases,
+        returns=returns,
+        returned_to_inventory=returned_to_inventory,
+        returned_to_supplier=returned_to_supplier,
+    )
 
 
 @inventory_bp.route("/add", methods=["GET", "POST"])
@@ -62,7 +92,10 @@ def add_part():
 @inventory_bp.route("/stock/<int:part_id>", methods=["POST"])
 @permission_required("inventory")
 def adjust_stock(part_id):
-    part = Part.query.get_or_404(part_id)
+    part = db.session.get(Part, part_id)
+    if part is None:
+        from flask import abort
+        abort(404)
     quantity = _decimal(request.form.get("quantity"))
     movement_type = request.form.get("movement_type", "ADJUSTMENT")
     if quantity <= 0 or movement_type not in {"IN", "OUT", "ADJUSTMENT"}:
