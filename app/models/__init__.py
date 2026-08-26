@@ -23,10 +23,7 @@ from app.models.job_purchase import JobPurchase
 from app.models.job_purchase_return import JobPurchaseReturn
 from app.models.inventory_category import InventoryCategory
 from app.models.supplier import Supplier
+from app.models.purchase import Purchase
+from app.models.purchase_item import PurchaseItem
 
-__all__ = [
-    "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage", "PartUsageReturn",
-    "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "LeadContact", "Booking",
-    "ServiceConfirmation", "RepairPhoto", "NotificationTemplate", "SMSLog", "RolePermission", "RepairExtraCharge",
-    "JobPurchase", "JobPurchaseReturn", "InventoryCategory", "Supplier",
-]
+__all__ = ["User","Customer","RepairOrder","RepairAuditLog","Part","PartUsage","PartUsageReturn","StockMovement","Invoice","Payment","RepairQC","WarrantyClaim","Lead","LeadContact","Booking","ServiceConfirmation","RepairPhoto","NotificationTemplate","SMSLog","RolePermission","RepairExtraCharge","JobPurchase","JobPurchaseReturn","InventoryCategory","Supplier","Purchase","PurchaseItem"]
