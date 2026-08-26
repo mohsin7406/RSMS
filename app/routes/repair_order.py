@@ -101,7 +101,10 @@ def _new_job_number():
 
 def _delivery_allowed(repair):
     if repair.status != "Ready":
-        return False, "Repair must pass QC before delivery"
+        return False, "Repair must be Ready before delivery"
+    qc = RepairQC.query.filter_by(repair_id=repair.id).first()
+    if qc is None or qc.after_status not in {"Passed", "Waived"}:
+        return False, "QC After Repair must be passed or waived before delivery"
     if repair.final_amount > 0 and repair.payment_status != "Paid":
         return False, "Invoice must be fully paid before delivery"
     return True, None
