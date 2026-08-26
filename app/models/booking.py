@@ -16,6 +16,7 @@ class Booking(db.Model):
     area = db.Column(db.String(120), nullable=True, index=True)
     notes = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(30), nullable=False, default="Scheduled", index=True)
+    cancellation_reason = db.Column(db.String(160), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
 
