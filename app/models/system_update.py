@@ -8,6 +8,7 @@ class SystemUpdate(db.Model):
     version = db.Column(db.String(50), nullable=False, index=True)
     previous_version = db.Column(db.String(50), nullable=True)
     filename = db.Column(db.String(255), nullable=False)
+    package_path = db.Column(db.String(500), nullable=False)
     package_sha256 = db.Column(db.String(64), nullable=False)
     status = db.Column(db.String(30), nullable=False, default="Uploaded", index=True)
     changelog = db.Column(db.Text, nullable=True)
