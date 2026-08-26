@@ -8,6 +8,7 @@ from app.security import current_user_id, permission_required
 from app.services.settings import get_options, get_setting
 
 leads_bp=Blueprint("leads",__name__,url_prefix="/leads")
+PER_PAGE=20
 def _booking_number():
     today=datetime.now(timezone.utc).strftime("%Y%m%d");latest=Booking.query.filter(Booking.booking_number.like(f"BOOK-{today}-%")).order_by(Booking.id.desc()).first();seq=int(latest.booking_number.rsplit("-",1)[-1])+1 if latest else 1;return f"BOOK-{today}-{seq:04d}"
 def _get_lead_or_404(lead_id):
@@ -30,7 +31,8 @@ def _apply_lead_form(lead):
 
 @leads_bp.route("/")
 @permission_required("leads")
-def list_leads():return render_template("leads/list.html",leads=Lead.query.order_by(Lead.created_at.desc()).all(),statuses=LEAD_STATUSES)
+def list_leads():
+    page=max(request.args.get("page",1,type=int),1);pagination=Lead.query.order_by(Lead.created_at.desc()).paginate(page=page,per_page=PER_PAGE,error_out=False);return render_template("leads/list.html",leads=pagination.items,pagination=pagination,statuses=LEAD_STATUSES)
 @leads_bp.route("/<int:id>")
 @permission_required("leads")
 def lead_detail(id):return render_template("leads/detail.html",lead=_get_lead_or_404(id),methods=CONTACT_METHODS,outcomes=CONTACT_OUTCOMES)
