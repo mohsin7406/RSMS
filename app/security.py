@@ -6,7 +6,7 @@ from flask import abort, current_app, g, redirect, render_template, request, ses
 
 from app.extensions import db
 from app.models import User
-from app.roles import role_allowed
+from app.roles import has_permission, role_allowed
 
 
 CSRF_SESSION_KEY = "_csrf_token"
@@ -61,6 +61,19 @@ def role_required(*roles):
     return decorator
 
 
+def permission_required(permission):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if g.current_user is None:
+                return redirect(url_for("auth.login", next=request.full_path))
+            if not has_permission(g.current_user.role, permission):
+                abort(403)
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
 def register_security(app):
     @app.before_request
     def _security_before_request():
@@ -69,7 +82,13 @@ def register_security(app):
 
     @app.context_processor
     def _security_context():
-        return {"csrf_token": get_csrf_token, "current_user": g.current_user}
+        return {
+            "csrf_token": get_csrf_token,
+            "current_user": g.current_user,
+            "has_permission": lambda permission: bool(
+                g.current_user and has_permission(g.current_user.role, permission)
+            ),
+        }
 
     @app.after_request
     def _security_headers(response):
