@@ -15,10 +15,7 @@
       {% for booking in bookings %}
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b last:border-0 pb-3">
         <div><div class="font-medium">{{ booking.booking_number }} · {{ booking.customer.name }}</div><div class="text-sm text-slate-500">{{ booking.scheduled_at.strftime('%d %b %Y %I:%M %p') }} · {{ booking.service_type }}</div><div class="text-sm text-slate-500">{{ booking.address or '' }}{% if booking.area %} · {{ booking.area }}{% endif %}</div></div>
-        <div class="flex gap-2 flex-wrap">
-          {% if booking.repair %}<a href="{{ url_for('repair.view_repair', id=booking.repair.id) }}" class="px-3 py-2 border rounded">Open Job</a>{% endif %}
-          <form method="post" action="{{ url_for('technician.booking_status', id=booking.id) }}" class="flex gap-2"><select name="status" class="px-3 py-2 border rounded dark:bg-slate-800"><option>{{ booking.status }}</option><option>On The Way</option><option>Started</option><option>Completed</option><option>Cancelled</option><option>Rescheduled</option></select><button class="px-3 py-2 bg-slate-900 text-white rounded">Update</button></form>
-        </div>
+        <div class="flex gap-2 flex-wrap">{% if booking.repair %}<a href="{{ url_for('repair.view_repair', id=booking.repair.id) }}" class="px-3 py-2 border rounded">Open Job</a>{% endif %}<form method="post" action="{{ url_for('technician.booking_status', id=booking.id) }}" class="flex gap-2"><select name="status" class="px-3 py-2 border rounded dark:bg-slate-800"><option>{{ booking.status }}</option><option>On The Way</option><option>Started</option><option>Completed</option><option>Cancelled</option><option>Rescheduled</option></select><button class="px-3 py-2 bg-slate-900 text-white rounded">Update</button></form></div>
       </div>
       {% else %}<p class="text-slate-500">No bookings today.</p>{% endfor %}
     </div>
@@ -34,12 +31,26 @@
     <section class="bg-white dark:bg-slate-900 p-6 rounded-xl border"><h2 class="font-bold text-lg mb-4">Waiting Parts</h2>{% for repair in waiting_parts %}<div class="border-b last:border-0 py-3 flex justify-between gap-3"><div><div class="font-medium">{{ repair.job_number }} · {{ repair.device }}</div><div class="text-sm text-slate-500">{{ repair.customer.name }}</div></div><a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="px-3 py-2 border rounded self-start">Open</a></div>{% else %}<p class="text-slate-500">No jobs waiting for parts.</p>{% endfor %}</section>
   </div>
 
-  <section class="bg-white dark:bg-slate-900 p-6 rounded-xl border">
-    <h2 class="font-bold text-lg mb-4">Active Assigned Jobs</h2>
-    <div class="space-y-3">{% for repair in repairs %}<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b last:border-0 pb-3"><div><div class="font-medium">{{ repair.job_number }} · {{ repair.customer.name }}</div><div class="text-sm text-slate-500">{{ repair.device }} · {{ repair.issue_description }}</div><div class="text-sm text-slate-500">{{ repair.service_type }} · {{ repair.status }}</div></div><div class="flex gap-2"><a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="px-3 py-2 border rounded">Open Job</a>{% if repair.service_type != 'Doorstep' %}<form method="post" action="{{ url_for('technician.repair_status', id=repair.id) }}" class="flex gap-2"><select name="status" class="px-3 py-2 border rounded dark:bg-slate-800">{% for status in statuses %}{% if status in ['Received','Diagnosing','Waiting Approval','Approved','Waiting Parts','In Repair','QC'] %}<option value="{{ status }}" {% if status == repair.status %}selected{% endif %}>{{ status }}</option>{% endif %}{% endfor %}</select><button class="px-3 py-2 bg-blue-600 text-white rounded">Update</button></form>{% endif %}</div></div>{% else %}<p class="text-slate-500">No active repair jobs assigned.</p>{% endfor %}</div>
-  </section>
+  <section class="bg-white dark:bg-slate-900 p-6 rounded-xl border"><h2 class="font-bold text-lg mb-4">Active Assigned Jobs</h2><div class="space-y-3">{% for repair in repairs %}<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b last:border-0 pb-3"><div><div class="font-medium">{{ repair.job_number }} · {{ repair.customer.name }}</div><div class="text-sm text-slate-500">{{ repair.device }} · {{ repair.issue_description }}</div><div class="text-sm text-slate-500">{{ repair.service_type }} · {{ repair.status }}</div></div><div class="flex gap-2"><a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="px-3 py-2 border rounded">Open Job</a>{% if repair.service_type != 'Doorstep' %}<form method="post" action="{{ url_for('technician.repair_status', id=repair.id) }}" class="flex gap-2"><select name="status" class="px-3 py-2 border rounded dark:bg-slate-800">{% for status in statuses %}{% if status in ['Received','Diagnosing','Waiting Approval','Approved','Waiting Parts','In Repair','QC'] %}<option value="{{ status }}" {% if status == repair.status %}selected{% endif %}>{{ status }}</option>{% endif %}{% endfor %}</select><button class="px-3 py-2 bg-blue-600 text-white rounded">Update</button></form>{% endif %}</div></div>{% else %}<p class="text-slate-500">No active repair jobs assigned.</p>{% endfor %}</div></section>
 
-  {% if completed_repairs %}<section class="bg-white dark:bg-slate-900 p-6 rounded-xl border"><h2 class="font-bold text-lg mb-4">Completed Jobs</h2>{% for repair in completed_repairs[:10] %}<div class="py-2 border-b last:border-0 flex justify-between gap-3"><span><span class="font-medium">{{ repair.job_number }}</span> · {{ repair.device }} · {{ repair.customer.name }}</span><a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="text-blue-600">Open</a></div>{% endfor %}</section>{% endif %}
+  {% if completed_repairs %}
+  <section class="bg-white dark:bg-slate-900 p-6 rounded-xl border">
+    <h2 class="font-bold text-lg mb-4">Completed Jobs — Payment & Extra Charges</h2>
+    {% for repair in completed_repairs[:10] %}
+    <div class="py-4 border-b last:border-0 space-y-3">
+      <div class="flex justify-between gap-3"><span><span class="font-medium">{{ repair.job_number }}</span> · {{ repair.device }} · {{ repair.customer.name }}<span class="block text-xs text-slate-500">Final ₹{{ '%.2f'|format(repair.final_amount) }} · Paid ₹{{ '%.2f'|format(repair.amount_paid) }}</span></span><a href="{{ url_for('repair.view_repair', id=repair.id) }}" class="text-blue-600">Open / Payment</a></div>
+      {% if repair.service_type == 'Doorstep' and not repair.invoice %}
+      <form method="post" action="{{ url_for('billing.add_extra_charge', repair_id=repair.id) }}" class="grid md:grid-cols-[140px_1fr_auto] gap-2 items-end bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
+        <label class="text-xs text-slate-500">Extra Amount<input name="amount" type="number" min="0.01" step="0.01" required class="mt-1 w-full border rounded p-2 bg-transparent"></label>
+        <label class="text-xs text-slate-500">Reason<input name="description" required placeholder="Extra part / labour / service" class="mt-1 w-full border rounded p-2 bg-transparent"></label>
+        <button class="px-3 py-2 bg-amber-600 text-white rounded">Add Extra Charge</button>
+      </form>
+      {% endif %}
+      {% if repair.extra_charges %}<div class="text-xs text-slate-500">Extras: {% for charge in repair.extra_charges %}₹{{ '%.2f'|format(charge.amount) }} {{ charge.description }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   {% if upcoming_bookings %}<section class="bg-white dark:bg-slate-900 p-6 rounded-xl border"><h2 class="font-bold text-lg mb-4">Upcoming Assigned Bookings</h2>{% for booking in upcoming_bookings %}<div class="py-2 border-b last:border-0"><span class="font-medium">{{ booking.booking_number }}</span> · {{ booking.customer.name }} · {{ booking.scheduled_at.strftime('%d %b %Y %I:%M %p') }}</div>{% endfor %}</section>{% endif %}
 </div>
