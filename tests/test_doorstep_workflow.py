@@ -1,8 +1,9 @@
 import re
 from datetime import datetime
+from decimal import Decimal
 
 from app.extensions import db
-from app.models import Booking, Customer, RepairOrder, RepairQC, User
+from app.models import Booking, Customer, Invoice, Payment, RepairOrder, RepairQC, User
 
 
 def _csrf(client, path):
@@ -64,6 +65,8 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert repair.service_type == "Doorstep"
         assert repair.assigned_technician_id is not None
         assert repair.status == "Approved"
+        repair.final_amount = Decimal("1500.00")
+        db.session.commit()
         repair_id = repair.id
 
     response = client.post(
@@ -91,3 +94,26 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         qc = RepairQC.query.filter_by(repair_id=repair_id).one()
         assert qc.after_status == "Passed"
         assert repair.status == "Completed"
+
+    response = client.post(
+        f"/billing/repair/{repair_id}/doorstep-payment",
+        data={
+            "csrf_token": _csrf(client, f"/repairs/view/{repair_id}"),
+            "amount": "1500",
+            "payment_method": "UPI",
+            "reference": "UPI-TEST-001",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with app.app_context():
+        repair = db.session.get(RepairOrder, repair_id)
+        invoice = Invoice.query.filter_by(repair_id=repair_id).one()
+        payment = Payment.query.filter_by(repair_id=repair_id).one()
+        assert repair.payment_status == "Paid"
+        assert repair.amount_paid == Decimal("1500.00")
+        assert invoice.status == "Paid"
+        assert invoice.total == Decimal("1500.00")
+        assert payment.amount == Decimal("1500.00")
+        assert payment.payment_method == "UPI"
