@@ -3,22 +3,22 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from app.extensions import db
 from app.models import Lead, User
 from app.models.lead import LEAD_STATUSES
-from app.security import login_required, role_required, current_user_id
+from app.security import permission_required
 
 leads_bp = Blueprint("leads", __name__, url_prefix="/leads")
 
 
 @leads_bp.route("/")
-@login_required
+@permission_required("leads")
 def list_leads():
     leads = Lead.query.order_by(Lead.created_at.desc()).all()
     return render_template("leads/list.html", leads=leads, statuses=LEAD_STATUSES)
 
 
 @leads_bp.route("/add", methods=["GET", "POST"])
-@role_required("admin", "staff")
+@permission_required("leads")
 def add_lead():
-    staff = User.query.filter(User.role.in_(["admin", "staff"])).order_by(User.email.asc()).all()
+    staff = User.query.filter(User.role.in_(["admin", "manager", "staff", "reception"])).order_by(User.email.asc()).all()
     if request.method == "POST":
         status = request.form.get("status", "New")
         if status not in LEAD_STATUSES:
@@ -48,7 +48,7 @@ def add_lead():
 
 
 @leads_bp.route("/<int:id>/status", methods=["POST"])
-@role_required("admin", "staff")
+@permission_required("leads")
 def update_status(id):
     lead = Lead.query.get_or_404(id)
     status = request.form.get("status", "")
@@ -62,7 +62,7 @@ def update_status(id):
 
 
 @leads_bp.route("/<int:id>/assign", methods=["POST"])
-@role_required("admin", "staff")
+@permission_required("leads")
 def assign_lead(id):
     lead = Lead.query.get_or_404(id)
     lead.assigned_to_id = request.form.get("assigned_to_id", type=int)
