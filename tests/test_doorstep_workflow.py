@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import Booking, Customer, Invoice, Payment, RepairOrder, RepairQC, User
+from app.models import Booking, Customer, Invoice, Payment, RepairExtraCharge, RepairOrder, RepairQC, User
 
 
 def _csrf(client, path):
@@ -65,6 +65,7 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert repair.service_type == "Doorstep"
         assert repair.assigned_technician_id == technician_id
         assert repair.status == "Approved"
+        repair.estimated_amount = Decimal("1500.00")
         repair.final_amount = Decimal("1500.00")
         db.session.commit()
         repair_id = repair.id
@@ -81,14 +82,35 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert qc.after_status == "Passed"
         assert repair.status == "Completed"
 
-    # Technician collects payment on the assigned completed job, but does not issue the invoice.
+    # Technician can add an audited extra charge without changing the original estimate.
     with client.session_transaction() as session:
         session["user_id"] = technician_id
+    response = client.post(
+        f"/billing/repair/{repair_id}/extra-charge",
+        data={
+            "csrf_token": _csrf(client, "/technician/"),
+            "amount": "800",
+            "description": "Charging flex and additional labour",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with app.app_context():
+        repair = db.session.get(RepairOrder, repair_id)
+        charge = RepairExtraCharge.query.filter_by(repair_id=repair_id).one()
+        assert repair.estimated_amount == Decimal("1500.00")
+        assert repair.final_amount == Decimal("2300.00")
+        assert charge.amount == Decimal("800.00")
+        assert charge.description == "Charging flex and additional labour"
+        assert charge.added_by_id == technician_id
+
+    # Technician collects the updated final amount but still does not issue the invoice.
     response = client.post(
         f"/billing/repair/{repair_id}/doorstep-payment",
         data={
             "csrf_token": _csrf(client, f"/repairs/view/{repair_id}"),
-            "amount": "1500",
+            "amount": "2300",
             "payment_method": "UPI",
             "reference": "UPI-TEST-001",
         },
@@ -100,10 +122,10 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         repair = db.session.get(RepairOrder, repair_id)
         payment = Payment.query.filter_by(repair_id=repair_id).one()
         assert repair.payment_status == "Paid"
-        assert repair.amount_paid == Decimal("1500.00")
+        assert repair.amount_paid == Decimal("2300.00")
         assert Invoice.query.filter_by(repair_id=repair_id).count() == 0
         assert payment.invoice_id is None
-        assert payment.amount == Decimal("1500.00")
+        assert payment.amount == Decimal("2300.00")
         assert payment.payment_method == "UPI"
 
     # Admin/Accounts can issue the invoice afterward; the existing payment is linked to it.
@@ -120,5 +142,5 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         invoice = Invoice.query.filter_by(repair_id=repair_id).one()
         payment = Payment.query.filter_by(repair_id=repair_id).one()
         assert invoice.status == "Paid"
-        assert invoice.total == Decimal("1500.00")
+        assert invoice.total == Decimal("2300.00")
         assert payment.invoice_id == invoice.id
