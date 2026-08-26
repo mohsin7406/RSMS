@@ -90,25 +90,35 @@
 </div>
 <script>
 (function () {
-    const phone = {{ (repair.customer.phone or '')|tojson }}.replace(/\D/g, '');
+    const rawPhone = {{ (repair.customer.phone or '')|tojson }};
+    const phone = rawPhone.replace(/\D/g, '');
     const message = document.getElementById('whatsapp-message');
     const openButton = document.getElementById('whatsapp-web-btn');
     const copyButton = document.getElementById('whatsapp-copy-btn');
     const hint = document.getElementById('whatsapp-hint');
 
+    function normalizeIndianMobile(value) {
+        let digits = String(value || '').replace(/\D/g, '');
+        if (digits.startsWith('0091') && digits.length === 14) digits = digits.slice(2);
+        if (digits.startsWith('91') && digits.length === 12) return digits;
+        if (digits.length === 10) return '91' + digits;
+        return null;
+    }
+
     function buildWhatsAppUrl() {
-        let normalized = phone;
-        if (normalized.length === 10) normalized = '91' + normalized;
+        const normalized = normalizeIndianMobile(phone);
         if (!normalized) return null;
         return 'https://wa.me/' + normalized + '?text=' + encodeURIComponent(message.value);
     }
 
     openButton?.addEventListener('click', function () {
+        const normalized = normalizeIndianMobile(phone);
         const url = buildWhatsAppUrl();
         if (!url) {
-            hint.textContent = 'Customer does not have a valid phone number.';
+            hint.textContent = 'Invalid Indian mobile number. Enter a 10-digit number or a number beginning with 91.';
             return;
         }
+        hint.textContent = 'Opening WhatsApp for +91 ' + normalized.slice(2) + '...';
         window.open(url, '_blank', 'noopener,noreferrer');
     });
 
