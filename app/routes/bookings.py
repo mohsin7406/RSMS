@@ -5,7 +5,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for,
 from app.extensions import db
 from app.models import Booking, User
 from app.models.booking import BOOKING_STATUSES
-from app.security import login_required, role_required, current_user_id
+from app.security import permission_required, current_user_id
 
 bookings_bp = Blueprint("bookings", __name__, url_prefix="/bookings")
 
@@ -18,14 +18,14 @@ def _booking_number():
 
 
 @bookings_bp.route("/")
-@login_required
+@permission_required("bookings")
 def list_bookings():
     bookings = Booking.query.order_by(Booking.scheduled_at.asc()).all()
     return render_template("bookings/list.html", bookings=bookings, statuses=BOOKING_STATUSES)
 
 
 @bookings_bp.route("/add", methods=["GET", "POST"])
-@role_required("admin", "staff")
+@permission_required("bookings")
 def add_booking():
     technicians = User.query.filter_by(role="technician").order_by(User.email.asc()).all()
     if request.method == "POST":
@@ -52,15 +52,23 @@ def add_booking():
 
 
 @bookings_bp.route("/<int:id>/status", methods=["POST"])
-@role_required("admin", "staff", "technician")
 def update_status(id):
     booking = Booking.query.get_or_404(id)
+    if g.current_user is None:
+        from flask import abort
+        abort(403)
+    if g.current_user.role == "technician":
+        if booking.technician_id != current_user_id():
+            return ("Forbidden", 403)
+    else:
+        from app.roles import has_permission
+        if not has_permission(g.current_user.role, "bookings"):
+            from flask import abort
+            abort(403)
     status = request.form.get("status", "")
     if status not in BOOKING_STATUSES:
         flash("Invalid booking status", "error")
         return redirect(url_for("bookings.list_bookings"))
-    if g.current_user and g.current_user.role == "technician" and booking.technician_id != current_user_id():
-        return ("Forbidden", 403)
     booking.status = status
     db.session.commit()
     flash("Booking status updated", "success")
