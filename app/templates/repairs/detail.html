@@ -5,12 +5,12 @@
     <div class="flex justify-between items-start">
         <div>
             <h1 class="text-3xl font-bold text-slate-900 dark:text-white">{{ repair.job_number }}</h1>
-            <p class="text-slate-500 mt-1">Created on {{ repair.created_at.strftime('%B %d, %Y') }}</p>
+            <p class="text-slate-500 mt-1">Created on {{ repair.created_at.strftime('%B %d, %Y') }} · {{ repair.service_type }}</p>
         </div>
         <div class="flex gap-3 flex-wrap justify-end">
             {% if repair.invoice %}
                 <a href="{{ url_for('billing.view_invoice', invoice_id=repair.invoice.id) }}" class="px-4 py-2 bg-green-600 text-white rounded-lg">View Invoice</a>
-            {% else %}
+            {% elif repair.service_type != 'Doorstep' %}
                 <form method="post" action="{{ url_for('billing.create_invoice', repair_id=repair.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="px-4 py-2 bg-green-600 text-white rounded-lg">Create Invoice</button>
@@ -25,6 +25,13 @@
             </form>
         </div>
     </div>
+
+    {% if repair.service_type == 'Doorstep' %}
+    <div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-5">
+        <h2 class="font-bold text-blue-900 dark:text-blue-200">Doorstep Workflow</h2>
+        <p class="text-sm text-blue-800 dark:text-blue-300 mt-1">Technician Assigned → Approved → QC Before → Repair at Customer Location → QC After → Job Complete → Payment → Invoice</p>
+    </div>
+    {% endif %}
 
     <div class="grid md:grid-cols-2 gap-6">
         {% for stage, title, status, tester, tested_at, notes, photos in [
@@ -77,13 +84,46 @@
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                 <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Financials</h3>
                 <div class="space-y-2 text-sm"><div class="flex justify-between"><span>Estimate</span><span>₹{{ '%.2f'|format(repair.estimated_amount) }}</span></div><div class="flex justify-between"><span>Final</span><span>₹{{ '%.2f'|format(repair.final_amount) }}</span></div><div class="flex justify-between"><span>Paid</span><span>₹{{ '%.2f'|format(repair.amount_paid) }}</span></div><div class="flex justify-between font-semibold"><span>Payment</span><span>{{ repair.payment_status }}</span></div></div>
+
+                {% if repair.service_type == 'Doorstep' and repair.status == 'Completed' and repair.payment_status != 'Paid' %}
+                <form method="post" action="{{ url_for('billing.collect_doorstep_payment', repair_id=repair.id) }}" class="mt-5 space-y-3 border-t pt-4">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <p class="text-sm font-semibold">Collect Payment</p>
+                    <label class="block text-xs text-slate-500">Amount
+                        <input type="number" step="0.01" min="0.01" name="amount" value="{{ '%.2f'|format(repair.final_amount - repair.amount_paid) }}" required class="mt-1 w-full rounded border p-2 bg-transparent text-sm">
+                    </label>
+                    <label class="block text-xs text-slate-500">Method
+                        <select name="payment_method" required class="mt-1 w-full rounded border p-2 bg-transparent text-sm">
+                            <option value="">Select</option><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option><option>Other</option>
+                        </select>
+                    </label>
+                    <label class="block text-xs text-slate-500">Reference
+                        <input name="reference" class="mt-1 w-full rounded border p-2 bg-transparent text-sm" placeholder="UPI ref / transaction ID">
+                    </label>
+                    <button class="w-full bg-green-600 text-white py-2 rounded text-sm font-medium">Collect Payment & Generate Invoice</button>
+                </form>
+                {% elif repair.service_type == 'Doorstep' and repair.status != 'Completed' %}
+                    <p class="mt-4 text-xs text-slate-500 border-t pt-3">Payment becomes available after QC After marks the job Complete.</p>
+                {% endif %}
             </div>
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                 <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Workflow</h3>
                 <form method="post" action="{{ url_for('repair.update_repair_status', id=repair.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="space-y-3"><div class="flex items-center justify-between mb-2"><span class="text-sm">Current:</span><span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">{{ repair.status }}</span></div><select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800"><option value="{{ repair.status }}" selected>{{ repair.status }}</option>{% for next_status in {'Pending':['Received','Cancelled'],'Received':['Diagnosing','Cancelled'],'Diagnosing':['Waiting Approval','Approved','Cancelled'],'Waiting Approval':['Approved','Cancelled'],'Approved':['Waiting Parts','In Repair','Cancelled'],'Waiting Parts':['In Repair','Cancelled'],'In Progress':['In Repair','QC','Cancelled'],'In Repair':['QC','Cancelled'],'QC':['In Repair','Ready','Cancelled'],'Ready':['Delivered','In Repair'],'Completed':['Delivered','In Repair']}.get(repair.status, []) %}<option value="{{ next_status }}">{{ next_status }}</option>{% endfor %}</select><button class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium">Update Status</button></div>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between mb-2"><span class="text-sm">Current:</span><span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">{{ repair.status }}</span></div>
+                        <select name="status" class="w-full px-3 py-2 rounded border dark:bg-slate-800">
+                            <option value="{{ repair.status }}" selected>{{ repair.status }}</option>
+                            {% if repair.service_type == 'Doorstep' %}
+                                {% for next_status in {'Pending':['Approved','Cancelled'],'Approved':['Cancelled'],'Completed':[]}.get(repair.status, []) %}<option value="{{ next_status }}">{{ next_status }}</option>{% endfor %}
+                            {% else %}
+                                {% for next_status in {'Pending':['Received','Cancelled'],'Received':['Diagnosing','Cancelled'],'Diagnosing':['Waiting Approval','Approved','Cancelled'],'Waiting Approval':['Approved','Cancelled'],'Approved':['Waiting Parts','In Repair','Cancelled'],'Waiting Parts':['In Repair','Cancelled'],'In Progress':['In Repair','QC','Cancelled'],'In Repair':['QC','Cancelled'],'QC':['In Repair','Ready','Cancelled'],'Ready':['Delivered','In Repair'],'Completed':['Delivered','In Repair']}.get(repair.status, []) %}<option value="{{ next_status }}">{{ next_status }}</option>{% endfor %}
+                            {% endif %}
+                        </select>
+                        <button class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium">Update Status</button>
+                    </div>
                 </form>
+                {% if repair.service_type == 'Doorstep' and repair.status == 'Approved' %}<p class="mt-3 text-xs text-slate-500">Use QC Before, perform the repair, then QC After. Passing QC After completes the job automatically.</p>{% endif %}
             </div>
             <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800"><h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Customer</h3><p class="font-medium">{{ repair.customer.name }}</p><p class="text-sm text-slate-500 mt-1">{{ repair.customer.phone }}</p><a href="{{ url_for('repair.repairs_by_customer', customer_id=repair.customer.id) }}" class="text-xs text-blue-500 hover:underline">View History</a></div>
         </div>
