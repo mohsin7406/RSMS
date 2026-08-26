@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-  <div><h2 class="text-2xl font-bold">Users</h2><p class="text-sm text-slate-500">Manage accounts and roles</p></div>
+  <div><h2 class="text-2xl font-bold">Users & Roles</h2><p class="text-sm text-slate-500">Manage accounts, roles and module access</p></div>
   <a href="{{ url_for('users.add_user') }}" class="px-4 py-2 rounded-lg bg-slate-900 text-white">Add User</a>
 </div>
-<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mb-6">
   <table class="w-full text-sm">
     <thead><tr class="text-left border-b border-slate-200 dark:border-slate-800"><th class="p-4">Email</th><th class="p-4">Role</th><th class="p-4">Change Role</th></tr></thead>
     <tbody>
@@ -24,5 +24,18 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+  <h3 class="text-lg font-semibold mb-4">Role Permission Matrix</h3>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-slate-200 dark:border-slate-800"><th class="text-left p-2">Role</th><th class="text-left p-2">Allowed modules</th></tr></thead>
+      <tbody>
+        {% for role, label in role_labels.items() %}
+        <tr class="border-b border-slate-100 dark:border-slate-800"><td class="p-2 font-medium">{{ label }}</td><td class="p-2 text-slate-600 dark:text-slate-300">{{ role_permissions.get(role, [])|sort|join(', ') or 'None' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
