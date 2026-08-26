@@ -32,13 +32,6 @@
         </div>
     </div>
 
-    {% if repair.service_type == 'Doorstep' %}
-    <div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-5">
-        <h2 class="font-bold text-blue-900 dark:text-blue-200">Doorstep Workflow</h2>
-        <p class="text-sm text-blue-800 dark:text-blue-300 mt-1">Technician Assigned → Approved → QC Before → Repair at Customer Location → QC After → Job Complete → Payment → Invoice by Admin/Accounts</p>
-    </div>
-    {% endif %}
-
     <div class="grid md:grid-cols-2 gap-6">
         {% for stage, title, status, tester, tested_at, notes, photos in [
             ('before', 'QC Before Repair', qc.before_status if qc else 'Pending', qc.before_tested_by if qc else None, qc.before_tested_at if qc else None, qc.before_notes if qc else None, qc.before_photos if qc else []),
