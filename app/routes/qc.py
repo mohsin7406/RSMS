@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for, g
 
@@ -50,7 +50,7 @@ def save_qc(repair_id):
     qc.checklist = checklist
     qc.notes = notes
     qc.tested_by_id = g.current_user.id if g.current_user else None
-    qc.tested_at = datetime.utcnow()
+    qc.tested_at = datetime.now(timezone.utc)
     db.session.add(qc)
 
     if status == "Passed":
