@@ -17,9 +17,10 @@ from app.models.repair_photo import RepairPhoto
 from app.models.notification_template import NotificationTemplate
 from app.models.sms_log import SMSLog
 from app.models.role_permission import RolePermission
+from app.models.repair_extra_charge import RepairExtraCharge
 
 __all__ = [
     "User", "Customer", "RepairOrder", "RepairAuditLog", "Part", "PartUsage",
     "StockMovement", "Invoice", "Payment", "RepairQC", "WarrantyClaim", "Lead", "LeadContact", "Booking",
-    "ServiceConfirmation", "RepairPhoto", "NotificationTemplate", "SMSLog", "RolePermission",
+    "ServiceConfirmation", "RepairPhoto", "NotificationTemplate", "SMSLog", "RolePermission", "RepairExtraCharge",
 ]
