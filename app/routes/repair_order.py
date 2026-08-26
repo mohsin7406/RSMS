@@ -94,16 +94,8 @@ def _validate_repair(values):
 
 def _new_job_number():
     prefix = datetime.utcnow().strftime("JOB-%Y%m%d")
-    latest = (
-        RepairOrder.query.filter(RepairOrder.job_number.like(f"{prefix}-%"))
-        .order_by(RepairOrder.id.desc())
-        .first()
-    )
-    sequence = (
-        int(latest.job_number.rsplit("-", 1)[-1]) + 1
-        if latest and latest.job_number.rsplit("-", 1)[-1].isdigit()
-        else 1
-    )
+    latest = RepairOrder.query.filter(RepairOrder.job_number.like(f"{prefix}-%")).order_by(RepairOrder.id.desc()).first()
+    sequence = int(latest.job_number.rsplit("-", 1)[-1]) + 1 if latest and latest.job_number.rsplit("-", 1)[-1].isdigit() else 1
     return f"{prefix}-{sequence:04d}"
 
 
@@ -123,14 +115,7 @@ def list_repairs():
     status = request.args.get("status", "")
     query = RepairOrder.query.filter(RepairOrder.deleted_at.is_(None)).join(Customer)
     if q:
-        query = query.filter(
-            or_(
-                Customer.name.ilike(f"%{q}%"),
-                RepairOrder.job_number.ilike(f"%{q}%"),
-                RepairOrder.device.ilike(f"%{q}%"),
-                RepairOrder.imei.ilike(f"%{q}%"),
-            )
-        )
+        query = query.filter(or_(Customer.name.ilike(f"%{q}%"), RepairOrder.job_number.ilike(f"%{q}%"), RepairOrder.device.ilike(f"%{q}%"), RepairOrder.imei.ilike(f"%{q}%")))
     if status:
         if status not in REPAIR_STATUSES:
             flash("Invalid status filter", "error")
@@ -143,12 +128,13 @@ def list_repairs():
 @role_required("admin", "staff")
 def add_repair():
     customers = Customer.query.order_by(Customer.name.asc()).all()
+    technicians = User.query.filter_by(role="technician").order_by(User.email.asc()).all()
     if request.method == "POST":
         values = _repair_values()
         error = _validate_repair(values)
         if error:
             flash(error, "error")
-            return render_template("repairs/form.html", customers=customers, action="Add")
+            return render_template("repairs/form.html", customers=customers, technicians=technicians, action="Add")
         values["job_number"] = _new_job_number()
         repair = RepairOrder(**values)
         db.session.add(repair)
@@ -157,7 +143,7 @@ def add_repair():
         db.session.commit()
         flash(f"Repair order {repair.job_number} created", "success")
         return redirect(url_for("repair.view_repair", id=repair.id))
-    return render_template("repairs/form.html", customers=customers, action="Add")
+    return render_template("repairs/form.html", customers=customers, technicians=technicians, action="Add")
 
 
 @repair_bp.route("/edit/<int:id>", methods=["GET", "POST"])
@@ -165,12 +151,13 @@ def add_repair():
 def edit_repair(id):
     repair = RepairOrder.query.get_or_404(id)
     customers = Customer.query.order_by(Customer.name.asc()).all()
+    technicians = User.query.filter_by(role="technician").order_by(User.email.asc()).all()
     if request.method == "POST":
         values = _repair_values()
         error = _validate_repair(values)
         if error:
             flash(error, "error")
-            return render_template("repairs/form.html", repair=repair, customers=customers, action="Edit")
+            return render_template("repairs/form.html", repair=repair, customers=customers, technicians=technicians, action="Edit")
         for key, value in values.items():
             old = getattr(repair, key)
             if old != value:
@@ -179,7 +166,7 @@ def edit_repair(id):
         db.session.commit()
         flash("Repair order updated", "success")
         return redirect(url_for("repair.view_repair", id=id))
-    return render_template("repairs/form.html", repair=repair, customers=customers, action="Edit")
+    return render_template("repairs/form.html", repair=repair, customers=customers, technicians=technicians, action="Edit")
 
 
 @repair_bp.route("/delete/<int:id>", methods=["POST"])
@@ -196,9 +183,7 @@ def delete_repair(id):
 @repair_bp.route("/view/<int:id>")
 @login_required
 def view_repair(id):
-    repair = RepairOrder.query.filter(
-        RepairOrder.id == id, RepairOrder.deleted_at.is_(None)
-    ).first_or_404()
+    repair = RepairOrder.query.filter(RepairOrder.id == id, RepairOrder.deleted_at.is_(None)).first_or_404()
     if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
         return ("Forbidden", 403)
     qc = RepairQC.query.filter_by(repair_id=repair.id).first()
@@ -217,12 +202,7 @@ def repair_audit(id):
 @login_required
 def repairs_by_customer(customer_id):
     customer = Customer.query.get_or_404(customer_id)
-    repairs = (
-        RepairOrder.query.filter_by(customer_id=customer_id)
-        .filter(RepairOrder.deleted_at.is_(None))
-        .order_by(RepairOrder.created_at.desc())
-        .all()
-    )
+    repairs = RepairOrder.query.filter_by(customer_id=customer_id).filter(RepairOrder.deleted_at.is_(None)).order_by(RepairOrder.created_at.desc()).all()
     return render_template("repairs/customer_repairs.html", customer=customer, repairs=repairs)
 
 
@@ -232,23 +212,15 @@ def repairs_by_status(status):
     if status not in REPAIR_STATUSES:
         flash("Invalid repair status", "error")
         return redirect(url_for("repair.list_repairs"))
-    repairs = (
-        RepairOrder.query.filter_by(status=status)
-        .filter(RepairOrder.deleted_at.is_(None))
-        .order_by(RepairOrder.created_at.desc())
-        .all()
-    )
+    repairs = RepairOrder.query.filter_by(status=status).filter(RepairOrder.deleted_at.is_(None)).order_by(RepairOrder.created_at.desc()).all()
     return render_template("repairs/status_repairs.html", status=status, repairs=repairs)
 
 
 @repair_bp.route("/update_status/<int:id>", methods=["POST"])
 @role_required("admin", "staff", "technician")
 def update_repair_status(id):
-    repair = RepairOrder.query.filter(
-        RepairOrder.id == id, RepairOrder.deleted_at.is_(None)
-    ).first_or_404()
+    repair = RepairOrder.query.filter(RepairOrder.id == id, RepairOrder.deleted_at.is_(None)).first_or_404()
     new_status = request.form.get("status", "")
-
     if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
         return ("Forbidden", 403)
     if new_status not in REPAIR_STATUSES:
@@ -262,7 +234,6 @@ def update_repair_status(id):
         if not allowed:
             flash(reason, "error")
             return redirect(url_for("repair.view_repair", id=id))
-
     old_status = repair.status
     if old_status != new_status:
         repair.status = new_status
@@ -277,17 +248,10 @@ def update_repair_status(id):
 @repair_bp.route("/<int:repair_id>/parts/add", methods=["POST"])
 @role_required("admin", "staff", "technician")
 def add_part_to_repair(repair_id):
-    repair = RepairOrder.query.filter(
-        RepairOrder.id == repair_id, RepairOrder.deleted_at.is_(None)
-    ).first_or_404()
+    repair = RepairOrder.query.filter(RepairOrder.id == repair_id, RepairOrder.deleted_at.is_(None)).first_or_404()
     if g.current_user and g.current_user.role == "technician" and repair.assigned_technician_id != g.current_user.id:
         return ("Forbidden", 403)
-
-    part = (
-        Part.query.filter_by(id=request.form.get("part_id", type=int), active=True)
-        .with_for_update()
-        .first_or_404()
-    )
+    part = Part.query.filter_by(id=request.form.get("part_id", type=int), active=True).with_for_update().first_or_404()
     quantity = _money(request.form.get("quantity"))
     if quantity <= 0:
         flash("Quantity must be greater than zero", "error")
@@ -299,25 +263,8 @@ def add_part_to_repair(repair_id):
     unit_price = _money(request.form.get("unit_price")) or part.selling_price
     try:
         part.quantity -= quantity
-        db.session.add(
-            PartUsage(
-                repair_id=repair.id,
-                part_id=part.id,
-                quantity=quantity,
-                unit_cost=unit_cost,
-                unit_price=unit_price,
-            )
-        )
-        db.session.add(
-            StockMovement(
-                part_id=part.id,
-                user_id=current_user_id(),
-                movement_type="OUT",
-                quantity=quantity,
-                reference=repair.job_number,
-                notes="Used on repair",
-            )
-        )
+        db.session.add(PartUsage(repair_id=repair.id, part_id=part.id, quantity=quantity, unit_cost=unit_cost, unit_price=unit_price))
+        db.session.add(StockMovement(part_id=part.id, user_id=current_user_id(), movement_type="OUT", quantity=quantity, reference=repair.job_number, notes="Used on repair"))
         _audit(repair, "part_added", None, f"{part.sku} x {quantity}")
         db.session.commit()
     except Exception:
