@@ -26,7 +26,7 @@ def _apply_booking_form(booking):
     return None
 @bookings_bp.route("/")
 @permission_required("bookings")
-def list_bookings():return render_template("bookings/list.html",bookings=Booking.query.order_by(Booking.scheduled_at).all(),statuses=BOOKING_STATUSES)
+def list_bookings():return render_template("bookings/list.html",bookings=Booking.query.order_by(Booking.scheduled_at).all(),statuses=BOOKING_STATUSES,cancellation_reasons=get_options("cancellation_reasons"))
 @bookings_bp.route("/add",methods=["GET","POST"])
 @permission_required("bookings")
 def add_booking():
@@ -74,6 +74,16 @@ def update_status(id):
         if not has_permission(g.current_user.role,"bookings"):abort(403)
     status=request.form.get("status","")
     if status not in BOOKING_STATUSES:flash("Invalid booking status","error");return redirect(url_for("bookings.list_bookings"))
+    if status=="Cancelled":
+        reason=request.form.get("cancellation_reason","").strip();allowed=get_options("cancellation_reasons")
+        if not reason:flash("Select a cancellation reason.","error");return redirect(url_for("bookings.list_bookings"))
+        if allowed and reason not in allowed:flash("Invalid cancellation reason.","error");return redirect(url_for("bookings.list_bookings"))
+        booking.cancellation_reason=reason
+        if booking.repair_id:
+            linked=db.session.get(RepairOrder,booking.repair_id)
+            if linked and linked.status in {"Pending","Approved"}:linked.status="Cancelled"
+    else:
+        booking.cancellation_reason=None
     booking.status=status;repair=None;created=False
     if status in {"Confirmed","Started","Completed"}:repair,created=_ensure_repair_for_booking(booking)
     db.session.commit()
@@ -81,5 +91,6 @@ def update_status(id):
         if repair.service_type=="Doorstep" and repair.status=="Approved":flash(f"Booking confirmed. Doorstep job {repair.job_number} is Approved and ready for QC Before","success")
         elif repair.service_type=="Doorstep" and repair.status=="Pending" and get_bool("require_technician_assignment"):flash(f"Booking confirmed and repair {repair.job_number} created as Pending. Assign a technician to approve the Doorstep job.","success")
         else:flash(f"Booking confirmed. Linked repair {repair.job_number}","success")
+    elif status=="Cancelled":flash(f"Booking cancelled: {booking.cancellation_reason}","success")
     else:flash("Booking status updated","success")
     return redirect(url_for("bookings.list_bookings"))
