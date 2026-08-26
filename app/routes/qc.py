@@ -123,14 +123,19 @@ def save_qc(repair_id):
     setattr(qc, tested_at_field, datetime.now(timezone.utc))
     setattr(qc, photos_field, existing_photos)
 
-    # Keep the legacy/general QC fields synchronized with the post-repair QC.
-    if stage == "after":
+    if stage == "before":
+        # QC Before is the gate that starts physical repair work. Once it passes
+        # (or is waived), move an approved/parts-waiting job into In Repair.
+        if status in {"Passed", "Waived"} and repair.status in {"Approved", "Waiting Parts"}:
+            repair.status = "In Repair"
+    else:
+        # Keep the legacy/general QC fields synchronized with post-repair QC.
         qc.status = status
         qc.checklist = checklist
         qc.notes = notes
         qc.tested_by_id = g.current_user.id if g.current_user else None
         qc.tested_at = getattr(qc, tested_at_field)
-        if status == "Passed":
+        if status in {"Passed", "Waived"}:
             repair.status = "Ready"
         elif status == "Failed":
             repair.status = "In Repair"
