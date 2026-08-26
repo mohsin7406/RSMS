@@ -91,6 +91,34 @@
                 <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Financials</h3>
                 <div class="space-y-2 text-sm"><div class="flex justify-between"><span>Estimate</span><span>₹{{ '%.2f'|format(repair.estimated_amount) }}</span></div><div class="flex justify-between"><span>Final</span><span>₹{{ '%.2f'|format(repair.final_amount) }}</span></div><div class="flex justify-between"><span>Paid</span><span>₹{{ '%.2f'|format(repair.amount_paid) }}</span></div><div class="flex justify-between font-semibold"><span>Payment</span><span>{{ repair.payment_status }}</span></div></div>
 
+                {% if repair.extra_charges %}
+                <div class="mt-4 border-t pt-4">
+                    <p class="text-sm font-semibold mb-2">Extra Charges</p>
+                    <div class="space-y-2">
+                        {% for charge in repair.extra_charges|sort(attribute='created_at') %}
+                        <div class="text-xs bg-slate-50 dark:bg-slate-800/60 rounded p-2">
+                            <div class="flex justify-between gap-2"><span>{{ charge.description }}</span><strong>₹{{ '%.2f'|format(charge.amount) }}</strong></div>
+                            <div class="text-slate-500 mt-1">{{ charge.created_by.email if charge.created_by else 'Unknown user' }} · {{ charge.created_at.strftime('%d %b %Y %I:%M %p') if charge.created_at else '' }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if repair.service_type == 'Doorstep' and repair.status == 'Completed' and not repair.invoice %}
+                <form method="post" action="{{ url_for('billing.add_extra_charge', repair_id=repair.id) }}" class="mt-5 space-y-3 border-t pt-4">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <p class="text-sm font-semibold">Add Extra Charge</p>
+                    <label class="block text-xs text-slate-500">Amount
+                        <input name="amount" type="number" min="0.01" step="0.01" required class="mt-1 w-full rounded border p-2 bg-transparent text-sm" placeholder="Extra amount">
+                    </label>
+                    <label class="block text-xs text-slate-500">Reason
+                        <input name="description" required class="mt-1 w-full rounded border p-2 bg-transparent text-sm" placeholder="Extra part / labour / service">
+                    </label>
+                    <button class="w-full bg-amber-600 text-white py-2 rounded text-sm font-medium">Add Extra Charge</button>
+                </form>
+                {% endif %}
+
                 {% if repair.service_type == 'Doorstep' and repair.status == 'Completed' and repair.payment_status != 'Paid' %}
                 <form method="post" action="{{ url_for('billing.collect_doorstep_payment', repair_id=repair.id) }}" class="mt-5 space-y-3 border-t pt-4">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
