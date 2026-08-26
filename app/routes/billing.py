@@ -1,13 +1,13 @@
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for, g
 from flask import abort
 
 from app.extensions import db
 from app.models import Invoice, Payment, RepairOrder
 from app.models.payment import PAYMENT_METHODS, PAYMENT_TYPES
-from app.security import role_required
+from app.security import permission_required
 
 billing_bp = Blueprint("billing", __name__, url_prefix="/billing")
 
@@ -36,7 +36,7 @@ def _totals(invoice):
 
 
 @billing_bp.route("/repair/<int:repair_id>/invoice", methods=["POST"])
-@role_required("admin", "staff")
+@permission_required("billing")
 def create_invoice(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).with_for_update().first_or_404()
     if repair.invoice:
@@ -68,7 +68,7 @@ def create_invoice(repair_id):
 
 
 @billing_bp.route("/invoice/<int:invoice_id>")
-@role_required("admin", "staff", "technician")
+@permission_required("billing")
 def view_invoice(invoice_id):
     invoice = db.session.get(Invoice, invoice_id)
     if invoice is None:
@@ -78,7 +78,7 @@ def view_invoice(invoice_id):
 
 
 @billing_bp.route("/invoice/<int:invoice_id>/payment", methods=["POST"])
-@role_required("admin", "staff")
+@permission_required("billing")
 def record_payment(invoice_id):
     invoice = Invoice.query.filter_by(id=invoice_id).with_for_update().first_or_404()
     payment_type = request.form.get("payment_type", "Payment")
