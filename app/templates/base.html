@@ -5,82 +5,46 @@
     <title>{{ title if title else "Repair Shop OS" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 font-sans antialiased selection:bg-blue-500 selection:text-white">
-
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 font-sans antialiased">
 <div class="flex h-screen overflow-hidden">
     <aside class="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 flex-shrink-0">
-        <div class="h-16 flex items-center px-6 border-b border-slate-800">
-            <span class="text-xl font-bold text-white tracking-wider">REPAIR OS</span>
-        </div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800"><span class="text-xl font-bold text-white tracking-wider">REPAIR OS</span></div>
         <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-            <a href="{{ url_for('main.dashboard') }}" class="flex items-center px-3 py-2.5 rounded-lg {% if request.endpoint == 'main.dashboard' %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Dashboard</a>
-            <a href="{{ url_for('repair.list_repairs') }}" class="flex items-center px-3 py-2.5 rounded-lg {% if request.endpoint and 'repair' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Repairs</a>
-            <a href="{{ url_for('customer.view_customers') }}" class="flex items-center px-3 py-2.5 rounded-lg {% if request.endpoint and 'customer' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Customers</a>
+            <a href="{{ url_for('main.dashboard') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint == 'main.dashboard' %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Dashboard</a>
+            <a href="{{ url_for('repair.list_repairs') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'repair' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Repairs</a>
+            <a href="{{ url_for('customer.view_customers') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'customer' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Customers</a>
+            <a href="{{ url_for('inventory.list_parts') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'inventory' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Inventory</a>
+            <a href="{{ url_for('leads.list_leads') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'lead' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Leads</a>
+            <a href="{{ url_for('bookings.list_bookings') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'booking' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Bookings</a>
+            <a href="{{ url_for('profitability.job_profitability') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'profitability' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Profitability</a>
+            {% if current_user and current_user.role in ['admin', 'staff', 'technician'] %}
+            <a href="{{ url_for('technician.dashboard') }}" class="block px-3 py-2.5 rounded-lg {% if request.endpoint and 'technician' in request.endpoint %}bg-slate-800 text-white{% else %}hover:bg-slate-800 hover:text-white{% endif %}">Technician</a>
+            {% endif %}
         </nav>
         <div class="p-4 border-t border-slate-800">
             <p class="text-xs text-slate-500 mb-2">Logged in as {{ current_user.role if current_user else 'Guest' }}</p>
-            {% if current_user %}
-            <a href="{{ url_for('auth.logout') }}" class="text-sm text-slate-400 hover:text-white">Sign Out</a>
-            {% endif %}
+            {% if current_user %}<a href="{{ url_for('auth.logout') }}" class="text-sm text-slate-400 hover:text-white">Sign Out</a>{% endif %}
         </div>
     </aside>
-
     <div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
         <header class="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-            <h1 class="text-lg font-bold">Repair OS</h1>
-            <div class="flex items-center gap-4">
-                <button id="theme-toggle" type="button" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">🌓</button>
-            </div>
+            <h1 class="text-lg font-bold">Repair OS</h1><button id="theme-toggle" type="button" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">🌓</button>
         </header>
-
         <div class="fixed top-20 right-5 z-50 space-y-2 pointer-events-none">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                    <div class="pointer-events-auto px-4 py-3 rounded-lg shadow-xl text-white min-w-[300px] {% if category == 'success' %}bg-green-600/90{% elif category == 'error' %}bg-red-600/90{% elif category == 'warning' %}bg-yellow-500/90{% else %}bg-blue-600/90{% endif %}">
-                        <p class="text-sm font-medium">{{ message }}</p>
-                    </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+            {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="pointer-events-auto px-4 py-3 rounded-lg shadow-xl text-white min-w-[300px] {% if category == 'success' %}bg-green-600/90{% elif category == 'error' %}bg-red-600/90{% elif category == 'warning' %}bg-yellow-500/90{% else %}bg-blue-600/90{% endif %}"><p class="text-sm font-medium">{{ message }}</p></div>{% endfor %}{% endwith %}
         </div>
-
-        <main class="w-full max-w-7xl mx-auto p-4 md:p-8 flex-grow">
-            {% block content %}{% endblock %}
-        </main>
-
+        <main class="w-full max-w-7xl mx-auto p-4 md:p-8 flex-grow">{% block content %}{% endblock %}</main>
         <footer class="border-t border-slate-200 dark:border-slate-800 p-6 text-center text-xs text-slate-500">&copy; 2026 Repair OS</footer>
     </div>
 </div>
-
 <script>
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-    if (csrfToken) {
-        document.querySelectorAll('form[method="post"], form[method="POST"], form[method="put"], form[method="PUT"], form[method="patch"], form[method="PATCH"], form[method="delete"], form[method="DELETE"]').forEach((form) => {
-            if (!form.querySelector('input[name="csrf_token"]')) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'csrf_token';
-                input.value = csrfToken;
-                form.appendChild(input);
-            }
-        });
-    }
-
-    const btn = document.getElementById('theme-toggle');
-    const html = document.documentElement;
-    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) html.classList.add('dark');
-    btn?.addEventListener('click', () => {
-        html.classList.toggle('dark');
-        localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
-    });
+const csrfToken=document.querySelector('meta[name="csrf-token"]')?.content;
+if(csrfToken){document.querySelectorAll('form').forEach(form=>{if((form.method||'get').toLowerCase()!=='get'&&!form.querySelector('input[name="csrf_token"]')){const input=document.createElement('input');input.type='hidden';input.name='csrf_token';input.value=csrfToken;form.appendChild(input);}});}
+const btn=document.getElementById('theme-toggle');const html=document.documentElement;if(localStorage.getItem('theme')==='dark'||(!('theme'in localStorage)&&window.matchMedia('(prefers-color-scheme: dark)').matches))html.classList.add('dark');btn?.addEventListener('click',()=>{html.classList.toggle('dark');localStorage.setItem('theme',html.classList.contains('dark')?'dark':'light');});
 </script>
 </body>
 </html>
