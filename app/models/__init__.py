@@ -29,5 +29,6 @@ from app.models.purchase_return import PurchaseReturn
 from app.models.operations import SupplierPayment, Expense, StockAllocation, AuditEvent
 from app.models.system_setting import SystemSetting
 from app.models.qc_checklist_item import QCChecklistItem
+from app.models.setting_option import SettingOption
 
-__all__=["User","Customer","RepairOrder","RepairAuditLog","Part","PartUsage","PartUsageReturn","StockMovement","Invoice","Payment","RepairQC","WarrantyClaim","Lead","LeadContact","Booking","ServiceConfirmation","RepairPhoto","NotificationTemplate","SMSLog","RolePermission","RepairExtraCharge","JobPurchase","JobPurchaseReturn","InventoryCategory","Supplier","Purchase","PurchaseItem","PurchaseReturn","SupplierPayment","Expense","StockAllocation","AuditEvent","SystemSetting","QCChecklistItem"]
+__all__=["User","Customer","RepairOrder","RepairAuditLog","Part","PartUsage","PartUsageReturn","StockMovement","Invoice","Payment","RepairQC","WarrantyClaim","Lead","LeadContact","Booking","ServiceConfirmation","RepairPhoto","NotificationTemplate","SMSLog","RolePermission","RepairExtraCharge","JobPurchase","JobPurchaseReturn","InventoryCategory","Supplier","Purchase","PurchaseItem","PurchaseReturn","SupplierPayment","Expense","StockAllocation","AuditEvent","SystemSetting","QCChecklistItem","SettingOption"]
