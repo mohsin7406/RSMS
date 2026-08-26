@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for, g
+from flask import Blueprint, flash, redirect, render_template, request, url_for, g, abort
 
 from app.extensions import db
 from app.models import RepairOrder, WarrantyClaim
@@ -10,13 +10,20 @@ from app.security import login_required, role_required
 warranty_bp = Blueprint("warranty", __name__, url_prefix="/warranty")
 
 
+def _as_utc(value):
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
 @warranty_bp.route("/repair/<int:repair_id>")
 @login_required
 def repair_warranty(repair_id):
     repair = RepairOrder.query.filter_by(id=repair_id).first_or_404()
     warranty_until = None
-    if repair.delivered_at and repair.warranty_days:
-        warranty_until = repair.delivered_at + timedelta(days=repair.warranty_days)
+    delivered_at = _as_utc(repair.delivered_at)
+    if delivered_at and repair.warranty_days:
+        warranty_until = delivered_at + timedelta(days=repair.warranty_days)
     return render_template("warranty/repair.html", repair=repair, warranty_until=warranty_until)
 
 
@@ -31,7 +38,7 @@ def open_claim(repair_id):
     if not repair.delivered_at or not repair.warranty_days:
         flash("This repair has no active warranty", "error")
         return redirect(url_for("warranty.repair_warranty", repair_id=repair_id))
-    warranty_until = repair.delivered_at + timedelta(days=repair.warranty_days)
+    warranty_until = _as_utc(repair.delivered_at) + timedelta(days=repair.warranty_days)
     if datetime.now(timezone.utc) > warranty_until:
         flash("Warranty period has expired", "error")
         return redirect(url_for("warranty.repair_warranty", repair_id=repair_id))
@@ -52,7 +59,9 @@ def open_claim(repair_id):
 @warranty_bp.route("/claim/<int:claim_id>", methods=["POST"])
 @role_required("admin", "staff", "technician")
 def update_claim(claim_id):
-    claim = WarrantyClaim.query.get_or_404(claim_id)
+    claim = db.session.get(WarrantyClaim, claim_id)
+    if claim is None:
+        abort(404)
     status = request.form.get("status", claim.status)
     if status not in WARRANTY_STATUSES:
         flash("Invalid warranty status", "error")
