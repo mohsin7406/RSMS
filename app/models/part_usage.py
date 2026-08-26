@@ -16,9 +16,25 @@ class PartUsage(db.Model):
     part = db.relationship("Part")
 
     @property
+    def returned_quantity(self):
+        return sum((returned.quantity for returned in self.returns), Decimal("0"))
+
+    @property
+    def remaining_quantity(self):
+        return max(self.quantity - self.returned_quantity, Decimal("0"))
+
+    @property
     def cost_total(self):
         return self.quantity * self.unit_cost
 
     @property
     def sale_total(self):
         return self.quantity * self.unit_price
+
+    @property
+    def net_cost_total(self):
+        return self.remaining_quantity * self.unit_cost
+
+    @property
+    def net_sale_total(self):
+        return self.remaining_quantity * self.unit_price
