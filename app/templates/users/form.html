@@ -10,7 +10,7 @@
       <select name="role" class="w-full rounded-lg border p-2 bg-transparent">
         {% for value, label in role_labels.items() %}<option value="{{ value }}" {% if value == 'staff' %}selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
-      <p class="text-xs text-slate-500 mt-2">Manager currently inherits Staff operational access but cannot access Administration settings.</p>
+      <p class="text-xs text-slate-500 mt-2">Accounts is limited to billing/reports/customer lookup. Reception / Telecaller is limited to customers, leads, bookings and repair lookup.</p>
     </div>
     <button class="px-4 py-2 rounded-lg bg-slate-900 text-white">Create User</button>
   </form>
