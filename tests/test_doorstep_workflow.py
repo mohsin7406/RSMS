@@ -65,8 +65,9 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert repair.service_type == "Doorstep"
         assert repair.assigned_technician_id == technician_id
         assert repair.status == "Approved"
+        # Admin enters only the estimate. Final is intentionally left blank/zero.
         repair.estimated_amount = Decimal("1500.00")
-        repair.final_amount = Decimal("1500.00")
+        repair.final_amount = Decimal("0.00")
         db.session.commit()
         repair_id = repair.id
 
@@ -82,13 +83,13 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert qc.after_status == "Passed"
         assert repair.status == "Completed"
 
-    # Technician can add an audited extra charge without changing the original estimate.
+    # Technician can add an audited extra charge; estimate becomes the base automatically.
     with client.session_transaction() as session:
         session["user_id"] = technician_id
     response = client.post(
         f"/billing/repair/{repair_id}/extra-charge",
         data={
-            "csrf_token": _csrf(client, "/technician/"),
+            "csrf_token": _csrf(client, f"/repairs/view/{repair_id}"),
             "amount": "800",
             "description": "Charging flex and additional labour",
         },
@@ -105,7 +106,6 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert charge.description == "Charging flex and additional labour"
         assert charge.added_by_id == technician_id
 
-    # Technician collects the updated final amount but still does not issue the invoice.
     response = client.post(
         f"/billing/repair/{repair_id}/doorstep-payment",
         data={
@@ -128,7 +128,6 @@ def test_doorstep_booking_confirmation_starts_approved_and_qc_after_completes_jo
         assert payment.amount == Decimal("2300.00")
         assert payment.payment_method == "UPI"
 
-    # Admin/Accounts can issue the invoice afterward; the existing payment is linked to it.
     with client.session_transaction() as session:
         session["user_id"] = admin_id
     response = client.post(
