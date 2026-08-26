@@ -12,6 +12,7 @@ def test_operational_templates_exist(app):
         "inventory/form.html",
         "qc/detail.html",
         "billing/invoice.html",
+        "warranty/repair.html",
         "customer_status/repair.html",
         "technician/dashboard.html",
         "reports/dashboard.html",
