@@ -22,6 +22,16 @@
                     </select>
                 </div>
                 <div>
+                    <label class="field-label">Assigned Technician</label>
+                    <select name="assigned_technician_id" class="field-input">
+                        <option value="">-- Unassigned --</option>
+                        {% for technician in technicians %}
+                        <option value="{{ technician.id }}" {% if repair and repair.assigned_technician_id == technician.id %}selected{% endif %}>{{ technician.email }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">Only users with the technician role are shown.</p>
+                </div>
+                <div>
                     <label class="field-label">Device</label>
                     <input name="device" required value="{{ repair.device if repair else '' }}" placeholder="iPhone 13 Pro Max" class="field-input">
                 </div>
