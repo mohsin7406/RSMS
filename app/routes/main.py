@@ -1,6 +1,6 @@
 from decimal import Decimal
 from flask import Blueprint, g, redirect, render_template, session, url_for
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import Booking, Expense, Lead, Part, Purchase, PurchaseItem, PurchaseReturn, RepairOrder, SupplierPayment
@@ -30,8 +30,9 @@ def dashboard():
     supplier_outstanding=max(purchased-returned-supplier_paid,Decimal("0"))
     unassigned=active_repairs.filter(RepairOrder.status=="Pending",RepairOrder.assigned_technician_id.is_(None)).count()
     qc_attention=active_repairs.filter(RepairOrder.status.in_(["Approved","In Progress"])).count()
-    # Outstanding can be computed entirely by SQL; avoid loading every unpaid RepairOrder.
-    unpaid_amount=D(db.session.query(func.coalesce(func.sum(func.max(func.coalesce(RepairOrder.final_amount,0)-func.coalesce(RepairOrder.amount_paid,0),0)),0)).filter(RepairOrder.deleted_at.is_(None),RepairOrder.payment_status!="Paid").scalar())
+    # Sum only positive balances in SQL; CASE is portable across SQLite and PostgreSQL.
+    balance=func.coalesce(RepairOrder.final_amount,0)-func.coalesce(RepairOrder.amount_paid,0)
+    unpaid_amount=D(db.session.query(func.coalesce(func.sum(case((balance>0,balance),else_=0)),0)).filter(RepairOrder.deleted_at.is_(None),RepairOrder.payment_status!="Paid").scalar())
     pending_expenses=Expense.query.filter_by(status="Pending").count()
     followups=Lead.query.filter(Lead.status.in_(["New","Contacted","Follow Up"])).order_by(Lead.updated_at.asc() if hasattr(Lead,"updated_at") else Lead.created_at.asc()).limit(5).all()
     upcoming=Booking.query.options(joinedload(Booking.customer)).filter(~Booking.status.in_(["Completed","Cancelled"])).order_by(Booking.scheduled_at.asc()).limit(5).all()
