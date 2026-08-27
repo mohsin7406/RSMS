@@ -1,0 +1,22 @@
+[Unit]
+Description=RSMS Gunicorn
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=rsms
+Group=www-data
+WorkingDirectory=/opt/rsms
+EnvironmentFile=/etc/rsms/rsms.env
+ExecStart=/opt/rsms/.venv/bin/gunicorn -c /opt/rsms/gunicorn.conf.py run:app
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/rsms/instance /opt/rsms/uploads
+
+[Install]
+WantedBy=multi-user.target
